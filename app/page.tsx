@@ -22,6 +22,7 @@ import {
   InputOTPSlot,
 } from '@/components/ui/input-otp';
 import { Game, type HUD } from '@/lib/game';
+import { AimStabilizer } from '@/lib/aim-stabilizer';
 import {
   CALIBRATION_TARGETS,
   mapAim,
@@ -769,8 +770,10 @@ function Controller() {
     seq = useRef(0),
     angles = useRef({ yaw: 0, pitch: 0 }),
     calibrationPoints = useRef<Angle[]>([]),
+    aimFilter = useRef(new AimStabilizer()),
+    rawPoint = useRef({ x: 0.5, y: 0.5 }),
     sensorTime = useRef(0),
-    samples = useRef<{ x: number; y: number; t: number }[]>([]),
+    samples = useRef<{ x: number; y: number; rawY: number; t: number }[]>([]),
     motionCleanup = useRef<() => void>(() => {}),
     stepRef = useRef(step),
     armed = useRef(true),
@@ -859,12 +862,15 @@ function Controller() {
         };
         if (stepRef.current >= 5) {
           const point = mapAim(angles.current, calibrationPoints.current);
-          data.current.x = point.x;
-          data.current.y = point.y;
           const now = performance.now();
+          rawPoint.current = point;
+          const stable = aimFilter.current.update(point, now);
+          data.current.x = stable.x;
+          data.current.y = stable.y;
           samples.current.push({
             x: data.current.x,
             y: data.current.y,
+            rawY: point.y,
             t: now,
           });
           samples.current = samples.current.filter((s) => now - s.t < 250);
@@ -881,10 +887,13 @@ function Controller() {
           speed > threshold.current &&
           now - lastFire.current > 350 &&
           old &&
-          data.current.y < old.y - 0.025
+          rawPoint.current.y < old.rawY - 0.025
         ) {
           armed.current = false;
           lastFire.current = now;
+          aimFilter.current.hold(old, now);
+          data.current.x = old.x;
+          data.current.y = old.y;
           sendAction('fire', old);
         }
       };
@@ -910,6 +919,7 @@ function Controller() {
       };
       calibrationPoints.current = [];
       samples.current = [];
+      aimFilter.current.reset();
       setSensor(true);
       setStep(0);
       setStatus('중앙 보정부터 시작하세요.');
@@ -936,6 +946,7 @@ function Controller() {
     }
     calibrationPoints.current = points;
     samples.current = [];
+    aimFilter.current.reset();
     setStep(step + 1);
     setError('');
     if (step === 4) setStatus('네 모서리 보정 완료');
