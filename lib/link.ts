@@ -1,4 +1,5 @@
 export type Packet = {
+  calibration?: number | null;
   x: number;
   y: number;
   events: { id: number; action: string; x: number; y: number }[];

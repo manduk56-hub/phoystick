@@ -22,6 +22,12 @@ import {
   InputOTPSlot,
 } from '@/components/ui/input-otp';
 import { Game, type HUD } from '@/lib/game';
+import {
+  CALIBRATION_TARGETS,
+  mapAim,
+  validCalibration,
+  type Angle,
+} from '@/lib/aim';
 import { api, Link, type Packet } from '@/lib/link';
 import * as T from 'three';
 import { RELOAD_NAMES, reloadPose } from '@/lib/reload-motion';
@@ -229,10 +235,12 @@ function Host() {
     [qr, setQr] = useState(''),
     [busy, setBusy] = useState(false),
     [showSetup, setShowSetup] = useState(false),
+    [calibrationStep, setCalibrationStep] = useState<number | null>(null),
     [fullscreen, setFullscreen] = useState(false),
     [mode, setMode] = useState<'mouse' | 'phone'>('mouse');
   const arena = useRef<HTMLElement>(null);
-  const expanded = hud.state !== 'ready' && !showSetup;
+  const calibrating = mode === 'phone' && calibrationStep !== null;
+  const expanded = calibrating || (hud.state !== 'ready' && !showSetup);
   const canvas = useRef<HTMLCanvasElement>(null),
     game = useRef<Game | null>(null),
     link = useRef<Link | null>(null),
@@ -357,13 +365,20 @@ function Host() {
       l.onConnection = setConnection;
       l.onInput = (p: Packet) => {
         if (modeRef.current !== 'phone') return;
+        const calibrating =
+          Number.isInteger(p.calibration) &&
+          p.calibration! >= 0 &&
+          p.calibration! < 5;
+        setCalibrationStep(calibrating ? p.calibration! : null);
+        if (calibrating && game.current?.hud.state === 'playing')
+          game.current.pause();
         if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
         game.current?.setAim(p.x, p.y);
         position(p.x, p.y);
         for (const e of p.events || []) {
           if (e.id > lastEvent.current) {
             lastEvent.current = e.id;
-            game.current?.action(e.action, e.x, e.y);
+            if (!calibrating) game.current?.action(e.action, e.x, e.y);
           }
         }
       };
@@ -428,6 +443,52 @@ function Host() {
           }}
         >
           <canvas ref={canvas} className="game-canvas" />
+          {calibrating && (
+            <div className="screen-calibration" role="status">
+              <div
+                className="calibration-instructions"
+                style={{
+                  top: calibrationStep === 0 ? '60%' : '50%',
+                  transform:
+                    calibrationStep === 0
+                      ? 'translateX(-50%)'
+                      : 'translate(-50%,-50%)',
+                }}
+              >
+                <span>조준 보정 {calibrationStep! + 1} / 5</span>
+                <h2>{CALIBRATION_TARGETS[calibrationStep!].name}</h2>
+                <p>파란 원의 중심을 가리키고 폰에서 저장하세요.</p>
+                <button
+                  className="quiet"
+                  onClick={() => {
+                    setCalibrationStep(null);
+                    setMode('mouse');
+                  }}
+                >
+                  보정 닫기 · 마우스로 전환
+                </button>
+              </div>
+              {CALIBRATION_TARGETS.map((target, i) => (
+                <div
+                  key={i}
+                  className={
+                    'calibration-target ' +
+                    (i === calibrationStep
+                      ? 'active'
+                      : i < calibrationStep!
+                        ? 'done'
+                        : '')
+                  }
+                  style={{
+                    left: target.x * 100 + '%',
+                    top: target.y * 100 + '%',
+                  }}
+                >
+                  <span>{i === 0 ? '＋' : i}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="vignette" />
           <div className="hud-top">
             <div>
@@ -450,7 +511,7 @@ function Host() {
           <div ref={cross} className="crosshair">
             <Crosshair size={38} />
           </div>
-          {hud.state !== 'playing' && (
+          {hud.state !== 'playing' && !calibrating && (
             <div className="overlay">
               <span className="eyebrow">
                 {hud.state === 'over'
@@ -707,8 +768,8 @@ function Controller() {
     data = useRef<Packet>({ x: 0.5, y: 0.5, events: [], time: 0 }),
     seq = useRef(0),
     angles = useRef({ yaw: 0, pitch: 0 }),
-    base = useRef({ yaw: 0, pitch: 0 }),
-    ranges = useRef({ yaw: 25, pitch: 18 }),
+    calibrationPoints = useRef<Angle[]>([]),
+    sensorTime = useRef(0),
     samples = useRef<{ x: number; y: number; t: number }[]>([]),
     motionCleanup = useRef<() => void>(() => {}),
     stepRef = useRef(step),
@@ -717,6 +778,7 @@ function Controller() {
     threshold = useRef(sensitivity),
     hudRef = useRef(hud);
   stepRef.current = step;
+  data.current.calibration = sensor && step < 5 ? step : null;
   threshold.current = sensitivity;
   hudRef.current = hud;
   useEffect(() => {
@@ -727,7 +789,7 @@ function Controller() {
     };
   }, []);
   function sendAction(action: string, point?: { x: number; y: number }) {
-    if (action === 'fire' && stepRef.current < 3) return;
+    if (action === 'fire' && stepRef.current < 5) return;
     const p = point || data.current;
     data.current.events.push({ id: ++seq.current, action, x: p.x, y: p.y });
     data.current.events = data.current.events.slice(-24);
@@ -782,10 +844,10 @@ function Controller() {
         throw Error('동작 센서 권한을 허용해야 합니다.');
       motionCleanup.current();
       let received = false;
-      const wrap = (n: number) => ((n + 540) % 360) - 180;
       const orientation = (e: DeviceOrientationEvent) => {
         if (e.alpha == null || e.beta == null || e.gamma == null) return;
         received = true;
+        sensorTime.current = performance.now();
         const a = (e.alpha * Math.PI) / 180,
           b = (e.beta * Math.PI) / 180;
         const vx = -Math.sin(a) * Math.cos(b),
@@ -795,25 +857,10 @@ function Controller() {
           yaw: (Math.atan2(vy, vx) * 180) / Math.PI,
           pitch: (Math.asin(Math.max(-1, Math.min(1, vz))) * 180) / Math.PI,
         };
-        if (stepRef.current >= 3) {
-          data.current.x = Math.max(
-            0,
-            Math.min(
-              1,
-              0.5 -
-                wrap(angles.current.yaw - base.current.yaw) /
-                  (2 * ranges.current.yaw),
-            ),
-          );
-          data.current.y = Math.max(
-            0,
-            Math.min(
-              1,
-              0.5 -
-                (angles.current.pitch - base.current.pitch) /
-                  (2 * ranges.current.pitch),
-            ),
-          );
+        if (stepRef.current >= 5) {
+          const point = mapAim(angles.current, calibrationPoints.current);
+          data.current.x = point.x;
+          data.current.y = point.y;
           const now = performance.now();
           samples.current.push({
             x: data.current.x,
@@ -829,7 +876,7 @@ function Controller() {
         if (speed < 35) armed.current = true;
         const old = samples.current.find((s) => now - s.t < 160);
         if (
-          stepRef.current >= 3 &&
+          stepRef.current >= 5 &&
           armed.current &&
           speed > threshold.current &&
           now - lastFire.current > 350 &&
@@ -861,6 +908,8 @@ function Controller() {
         clearInterval(interval);
         clearTimeout(timeout);
       };
+      calibrationPoints.current = [];
+      samples.current = [];
       setSensor(true);
       setStep(0);
       setStatus('중앙 보정부터 시작하세요.');
@@ -869,29 +918,27 @@ function Controller() {
     }
   }
   function calibrate() {
-    const a = angles.current;
-    if (step === 0) {
-      base.current = { ...a };
-      setStep(1);
-    } else if (step === 1) {
-      const diff = ((a.yaw - base.current.yaw + 540) % 360) - 180;
-      if (Math.abs(diff) < 3) {
-        setError('폰을 화면 오른쪽 끝으로 더 돌려 주세요.');
-        return;
-      }
-      ranges.current.yaw = -diff;
-      setStep(2);
-    } else if (step === 2) {
-      const diff = a.pitch - base.current.pitch;
-      if (Math.abs(diff) < 3) {
-        setError('폰을 화면 위쪽 끝으로 더 올려 주세요.');
-        return;
-      }
-      ranges.current.pitch = diff;
-      setStep(3);
-      setStatus('조준 준비 완료');
+    if (!sensorTime.current || performance.now() - sensorTime.current > 600) {
+      setError(
+        '센서 값을 기다리는 중입니다. 폰을 조금 움직인 뒤 다시 저장하세요.',
+      );
+      return;
     }
+    const points = step === 0 ? [] : calibrationPoints.current.slice(0, step);
+    points.push({ ...angles.current });
+    if (step === 4 && !validCalibration(points)) {
+      setError(
+        '모서리가 겹치거나 순서가 맞지 않습니다. 중앙부터 파란 원을 다시 따라가 주세요.',
+      );
+      calibrationPoints.current = [];
+      setStep(0);
+      return;
+    }
+    calibrationPoints.current = points;
+    samples.current = [];
+    setStep(step + 1);
     setError('');
+    if (step === 4) setStatus('네 모서리 보정 완료');
   }
   return (
     <section className="controller">
@@ -940,32 +987,29 @@ function Controller() {
               탄약 <b>{hud.ammo + (hud.chamber ? 1 : 0)}</b>
             </span>
           </div>
-          {step < 3 ? (
+          {step < 5 ? (
             <div className="calibration">
               <h2>
                 {!sensor
                   ? '폰을 가로로 잡으세요.'
-                  : [
-                      '화면 중앙을 가리키세요.',
-                      '화면 오른쪽 끝을 가리키세요.',
-                      '화면 위쪽 끝을 가리키세요.',
-                    ][step]}
+                  : `PC의 ${CALIBRATION_TARGETS[step].name} 파란 원을 가리키세요.`}
               </h2>
               <p>
                 폰의 충전 단자 반대쪽 끝을 총구로 사용합니다.
                 <br />
-                같은 자리를 유지하고 손목으로 방향을 바꿔 주세요.
+                PC의 파란 원 중심을 가리키세요. 중앙 → 왼쪽 위 → 오른쪽 위 →
+                오른쪽 아래 → 왼쪽 아래 순서입니다. 같은 자리를 유지해 주세요.
               </p>
               <button onClick={() => (sensor ? calibrate() : enable())}>
                 {sensor
-                  ? ['중앙 저장', '오른쪽 끝 저장', '위쪽 끝 저장'][step]
+                  ? `${CALIBRATION_TARGETS[step].name} 저장 (${step + 1}/5)`
                   : '센서 허용하고 보정 시작'}{' '}
                 <Crosshair size={18} />
               </button>
               <button
                 className="text-button"
                 onClick={() => {
-                  setStep(3);
+                  setStep(5);
                   setSensor(false);
                   setStatus('터치 조준 모드');
                   motionCleanup.current();

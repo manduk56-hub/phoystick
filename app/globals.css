@@ -1019,3 +1019,88 @@ footer {
     font-size: 30px;
   }
 }
+.screen-calibration {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: #061423f2;
+  overflow: hidden;
+}
+.calibration-instructions {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  width: min(560px, 80%);
+}
+.calibration-instructions > span {
+  color: #73bfff;
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+.calibration-instructions h2 {
+  font-size: 32px;
+  margin: 10px 0;
+}
+.calibration-instructions p {
+  font-size: 15px;
+  margin: 8px 0;
+}
+.calibration-target {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  border: 2px solid #52748a;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #6e8b9d;
+  font-size: 14px;
+  background: #0b2031;
+}
+.calibration-target.active {
+  width: 46px;
+  height: 46px;
+  background: #1988ff;
+  color: white;
+  border: 3px solid #b7dfff;
+  box-shadow:
+    0 0 0 9px #218eff33,
+    0 0 30px #1688ff99;
+}
+.calibration-target.active:after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.calibration-target.active span {
+  position: absolute;
+  top: 50px;
+  white-space: nowrap;
+  font-weight: bold;
+}
+.calibration-target.done {
+  border-color: #70cfad;
+  color: #70cfad;
+  background: #133e3e;
+}
+@media (max-height: 550px) {
+  .calibration-instructions {
+    top: 67%;
+  }
+  .calibration-instructions h2 {
+    font-size: 24px;
+    margin: 5px;
+  }
+  .calibration-instructions p {
+    font-size: 13px;
+  }
+}
