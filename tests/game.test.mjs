@@ -14,7 +14,9 @@ function game() {
     state: 'playing',
     hit: '',
   };
-  g.aim = { x: 0.5, y: 0.5 }; g.camera={add(){}};g.casings=[];
+  g.aim = { x: 0.5, y: 0.5 };
+  g.camera = { add() {} };
+  g.casings = [];
   g.emit = () => {};
   g.sound = () => {};
   g.lastShot = -Infinity;
@@ -46,11 +48,17 @@ test('empty reload needs all three operations and racks one cartridge', () => {
   g.hud.ammo = 0;
   g.hud.chamber = false;
   g.reload();
+  assert.equal(g.hud.reload, 0);
+  assert.equal(g.hud.reloadMotion, 1);
+  g.advanceReload(1);
   assert.equal(g.hud.reload, 1);
   g.reload();
+  assert.equal(g.hud.ammo, 0);
+  g.advanceReload(1.1);
   assert.equal(g.hud.ammo, 12);
   assert.equal(g.hud.chamber, false);
   g.reload();
+  g.advanceReload(1);
   assert.equal(g.hud.reload, 0);
   assert.equal(g.hud.ammo, 11);
   assert.equal(g.hud.chamber, true);
@@ -60,10 +68,29 @@ test('loaded chamber is preserved during tactical reload and firing blocked duri
   g.reload();
   g.fire(0.5, 0.5);
   assert.equal(g.hud.ammo, 11);
+  g.advanceReload(1);
   g.reload();
+  g.advanceReload(1.1);
   g.reload();
+  g.advanceReload(1);
   assert.equal(g.hud.ammo, 12);
   assert.equal(g.hud.chamber, true);
+});
+test('reload cannot skip a running animation and freezes when paused', () => {
+  const g = game();
+  g.reload();
+  g.advanceReload(0.2);
+  const progress = g.hud.reloadProgress;
+  g.reload();
+  assert.equal(g.hud.reloadMotion, 1);
+  assert.equal(g.hud.reloadProgress, progress);
+  g.pause();
+  g.advanceReload(10);
+  assert.equal(g.hud.reloadProgress, progress);
+  g.pause();
+  g.advanceReload(1);
+  assert.equal(g.hud.reload, 1);
+  assert.equal(g.hud.reloadMotion, 0);
 });
 test('clamps pointer to screen bounds', () => {
   const g = game();
@@ -92,4 +119,3 @@ test('paused state ignores fire and reload; pause resumes', () => {
   g.pause();
   assert.equal(g.hud.state, 'playing');
 });
-

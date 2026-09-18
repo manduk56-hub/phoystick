@@ -883,3 +883,40 @@ footer {
     margin-right: 0;
   }
 }
+/* Keep enemy silhouettes readable against the warehouse artwork. */
+.arena {
+  background-image:
+    linear-gradient(#08131a88, #08131a88), url('/assets/warehouse.png');
+}
+.vignette {
+  box-shadow: inset 0 0 85px 12px #030a1055;
+}
+.reload-status {
+  position: absolute;
+  bottom: 104px;
+  left: 26px;
+  width: 240px;
+  pointer-events: none;
+  background: #0b171cde;
+  border: 1px solid #d9fd6255;
+  padding: 12px 14px;
+  border-radius: 5px;
+}
+.reload-status > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 9px;
+  color: #e6f4cc;
+}
+.reload-status [data-slot='progress-track'] {
+  background: #3a4940;
+  height: 4px;
+}
+.reload-status [data-slot='progress-indicator'] {
+  background: #d9fd62;
+}
+.weapon-label {
+  max-width: 65%;
+}

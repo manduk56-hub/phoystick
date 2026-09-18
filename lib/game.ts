@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { RELOAD_SECONDS, reloadPose } from './reload-motion.ts';
 export type HUD = {
   health: number;
   ammo: number;
@@ -9,6 +10,8 @@ export type HUD = {
   wave: number;
   state: string;
   hit: string;
+  reloadMotion?: number;
+  reloadProgress?: number;
 };
 type Enemy = {
   group: T.Group;
@@ -48,6 +51,7 @@ export class Game {
   slide: T.Mesh;
   mag: T.Mesh;
   gun = new T.Group();
+  supportHand = new T.Group();
   light: T.PointLight;
   lastShot = 0;
   audio: AudioContext | null = null;
@@ -69,13 +73,16 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
     this.renderer.setClearColor(0x080f13, 0);
     this.renderer.shadowMap.enabled = true;
-    this.scene.fog = new T.FogExp2(0x102129, 0.035);
+    this.scene.fog = new T.FogExp2(0x102129, 0.012);
     this.camera.position.set(0, 1.7, 7);
     this.camera.lookAt(0, 1.5, -20);
     this.scene.add(new T.HemisphereLight(0xa5d9e8, 0x19212a, 2));
     const key = new T.DirectionalLight(0xc3e4dd, 3);
     key.position.set(-4, 9, 4);
     this.scene.add(key);
+    const rim = new T.DirectionalLight(0xffe0a3, 2.4);
+    rim.position.set(2, 5, -25);
+    this.scene.add(rim);
     const orange = new T.PointLight(0xff9455, 40, 28);
     orange.position.set(6, 3, -9);
     this.scene.add(orange);
@@ -121,6 +128,17 @@ export class Game {
     const sight = this.box(0.045, 0.04, 0.055, 0xd9fd62);
     sight.position.set(0, 0.18, -0.35);
     this.gun.add(sight);
+    const palm = this.box(0.17, 0.13, 0.17, 0x596269);
+    this.supportHand.add(palm);
+    const wrist = this.box(0.13, 0.27, 0.13, 0x29383f);
+    wrist.position.y = -0.15;
+    this.supportHand.add(wrist);
+    for (let i = 0; i < 3; i++) {
+      const finger = this.box(0.04, 0.05, 0.15, 0x85918b);
+      finger.position.set(-0.07 + i * 0.055, 0.07, -0.035);
+      this.supportHand.add(finger);
+    }
+    this.gun.add(this.supportHand);
     this.gun.position.set(0.29, -0.3, -0.8);
     this.camera.add(this.gun);
     this.scene.add(this.camera);
@@ -201,7 +219,26 @@ export class Game {
     }
   }
   reload() {
-    if (this.hud.reload === 0) this.hud.reload = 1;
+    if (this.hud.reloadMotion || this.hud.state !== 'playing') return;
+    this.hud.reloadMotion = this.hud.reload + 1;
+    this.hud.reloadProgress = 0;
+    this.sound(260, 0.06, 'triangle');
+    this.emit();
+  }
+  advanceReload(dt: number) {
+    const phase = this.hud.reloadMotion;
+    if (!phase || this.hud.state !== 'playing') return;
+    const before = this.hud.reloadProgress || 0;
+    this.hud.reloadProgress = Math.min(1, before + dt / RELOAD_SECONDS[phase]);
+    if (this.hud.reloadProgress < 1) {
+      if (Math.floor(before * 12) !== Math.floor(this.hud.reloadProgress * 12))
+        this.emit();
+      return;
+    }
+    if (this.hud.reload === 0) {
+      this.hud.reload = 1;
+      this.hud.ammo = 0;
+    }
     else if (this.hud.reload === 1) {
       this.hud.ammo = 12;
       this.hud.reload = 2;
@@ -212,6 +249,8 @@ export class Game {
       }
       this.hud.reload = 0;
     }
+    this.hud.reloadMotion = 0;
+    this.hud.reloadProgress = 0;
     this.sound(150 + this.hud.reload * 130, 0.06, 'triangle');
     this.emit();
   }
@@ -219,7 +258,7 @@ export class Game {
     const now = performance.now();
     if (now - this.lastShot < 190) return;
     this.lastShot = now;
-    if (this.hud.reload || !this.hud.chamber) {
+    if (this.hud.reload || this.hud.reloadMotion || !this.hud.chamber) {
       this.sound(100, 0.04, 'square');
       this.hud.hit = this.hud.reload
         ? '장전을 완료하세요'
@@ -294,17 +333,33 @@ export class Game {
       parts.push(m);
       return m;
     };
-    const skin = 0x708c76,
-      cloth = 0x354847;
+    const skin = 0xc4d796,
+      cloth = 0xc0824b;
     add(0.65, 0.78, 0.35, cloth, 0, 1.1);
     const head = add(0.4, 0.46, 0.39, skin, 0, 1.74);
     add(0.2, 0.62, 0.23, skin, -0.44, 1.18, 0.27).rotation.x = -0.9;
     add(0.2, 0.62, 0.23, skin, 0.44, 1.18, 0.27).rotation.x = -0.9;
-    add(0.23, 0.75, 0.25, 0x263238, -0.19, 0.39);
-    add(0.23, 0.75, 0.25, 0x263238, 0.19, 0.39);
+    add(0.23, 0.75, 0.25, 0x817b64, -0.19, 0.39);
+    add(0.23, 0.75, 0.25, 0x817b64, 0.19, 0.39);
     for (const x of [-0.1, 0.1]) {
       const eye = add(0.06, 0.045, 0.025, 0xe8f4ad, x, 1.79, 0.21);
       (eye.material as T.MeshStandardMaterial).emissive.setHex(0xff704d);
+    }
+    for (const part of parts) {
+      const material = part.material as T.MeshStandardMaterial;
+      material.emissive.setHex(0x614926);
+      material.emissiveIntensity = 0.3;
+      material.metalness = 0;
+      material.roughness = 0.9;
+      const edge = new T.LineSegments(
+        new T.EdgesGeometry(part.geometry),
+        new T.LineBasicMaterial({
+          color: 0xffd783,
+          transparent: true,
+          opacity: 0.65,
+        }),
+      );
+      part.add(edge);
     }
     group.position.set((Math.random() - 0.5) * 11, 0, -35 - Math.random() * 9);
     this.scene.add(group);
@@ -320,7 +375,7 @@ export class Game {
   remove(e: Enemy) {
     this.scene.remove(e.group);
     e.group.traverse((o) => {
-      if (o instanceof T.Mesh) {
+      if (o instanceof T.Mesh || o instanceof T.LineSegments) {
         o.geometry.dispose();
         (o.material as T.Material).dispose();
       }
@@ -355,6 +410,7 @@ export class Game {
     this.last = t;
     this.elapsed += dt;
     if (this.hud.state === 'playing') {
+      this.advanceReload(dt);
       this.spawn -= dt;
       if (this.remaining > 0 && this.spawn <= 0) {
         this.spawnEnemy();
@@ -403,16 +459,38 @@ export class Game {
     }
     this.flash = Math.max(0, this.flash - dt);
     this.damage = Math.max(0, this.damage - dt);
+    const pose = reloadPose(
+      this.hud.reload,
+      this.hud.reloadMotion,
+      this.hud.reloadProgress,
+    );
+    const locked = !this.hud.chamber && this.hud.reloadMotion !== 3;
     this.slide.position.z =
-      -0.12 +
-      (this.flash > 0 || (!this.hud.chamber && this.hud.reload === 0)
-        ? 0.08
-        : 0);
-    this.mag.position.y = this.hud.reload === 1 ? -0.6 : -0.2;
-    this.mag.visible = this.hud.reload !== 1;
-    this.gun.rotation.x = this.flash * 1.7;
-    this.gun.rotation.z = this.hud.reload ? -0.4 : 0;
-    this.gun.position.x = 0.29 + (this.aim.x - 0.5) * 0.14;
+      -0.12 + Math.max(pose.pull * 0.16, this.flash > 0 || locked ? 0.08 : 0);
+    this.mag.position.set(
+      -pose.drop * 0.09,
+      -0.2 - pose.drop * 0.43,
+      0.075 + pose.drop * 0.08,
+    );
+    this.mag.rotation.z = pose.drop * -0.22;
+    this.mag.visible = true;
+    this.gun.rotation.set(
+      this.flash * 1.7 + pose.tilt * 0.12,
+      pose.tilt * -0.95,
+      pose.tilt * -0.26,
+    );
+    this.gun.position.set(
+      0.29 - pose.tilt * 0.22 + (this.aim.x - 0.5) * 0.14,
+      -0.3 + pose.tilt * 0.1,
+      -0.8 + pose.tilt * 0.16,
+    );
+    this.supportHand.visible = pose.hand > 0;
+    this.supportHand.position.set(
+      pose.rack ? -0.13 : -0.1,
+      pose.rack ? 0.14 : -0.29 - pose.drop * 0.43,
+      pose.rack ? -0.06 + pose.pull * 0.16 : 0.09,
+    );
+    this.supportHand.scale.setScalar(pose.hand);
     this.light.intensity = this.flash * 140;
     this.canvas.style.filter = this.damage
       ? 'sepia(.6) saturate(2) hue-rotate(320deg)'
@@ -425,7 +503,7 @@ export class Game {
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     this.scene.traverse((o) => {
-      if (o instanceof T.Mesh) {
+      if (o instanceof T.Mesh || o instanceof T.LineSegments) {
         o.geometry.dispose();
         if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
         else o.material.dispose();

@@ -22,6 +22,8 @@ import {
 import { Game, type HUD } from '@/lib/game';
 import { api, Link, type Packet } from '@/lib/link';
 import * as T from 'three';
+import { RELOAD_NAMES, reloadPose } from '@/lib/reload-motion';
+import { Progress } from '@/components/ui/progress';
 import {
   NativeSelect,
   NativeSelectOption,
@@ -38,10 +40,22 @@ const empty: HUD = {
   hit: '',
 };
 const reloadLabels = ['탄창 빼기', '새 탄창 삽입', '슬라이드 당기기'];
-function Weapon({ reload, flash }: { reload: number; flash: boolean }) {
+function Weapon({
+  reload,
+  flash,
+  motion = 0,
+  progress = 0,
+  chamber = true,
+}: {
+  reload: number;
+  flash: boolean;
+  motion?: number;
+  progress?: number;
+  chamber?: boolean;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const state = useRef({ reload, flash });
-  state.current = { reload, flash };
+  const state = useRef({ reload, flash, motion, progress, chamber });
+  state.current = { reload, flash, motion, progress, chamber };
   useEffect(() => {
     const c = ref.current!;
     let r: T.WebGLRenderer;
@@ -91,6 +105,21 @@ function Weapon({ reload, flash }: { reload: number; flash: boolean }) {
     );
     guard.position.set(0.02, -0.13, 0);
     gun.add(guard);
+    const hand = new T.Group();
+    const glove = new T.Mesh(
+      new T.BoxGeometry(0.28, 0.2, 0.3),
+      new T.MeshStandardMaterial({ color: 0x54666b, roughness: 0.8 }),
+    );
+    hand.add(glove);
+    for (let i = 0; i < 3; i++) {
+      const finger = new T.Mesh(
+        new T.BoxGeometry(0.06, 0.08, 0.32),
+        new T.MeshStandardMaterial({ color: 0x90a29a, roughness: 0.8 }),
+      );
+      finger.position.set(-0.09 + i * 0.09, 0.12, 0);
+      hand.add(finger);
+    }
+    gun.add(hand);
     gun.rotation.y = -0.18;
     let id = 0;
     const ro = new ResizeObserver(() => {
@@ -100,9 +129,33 @@ function Weapon({ reload, flash }: { reload: number; flash: boolean }) {
     });
     ro.observe(c);
     const loop = () => {
-      slide.position.x = -0.1 + (state.current.flash ? 0.12 : 0);
-      mag.position.y = state.current.reload === 1 ? -0.75 : -0.3;
-      gun.rotation.z = state.current.flash ? -0.07 : 0;
+      const s = state.current;
+      const pose = reloadPose(s.reload, s.motion, s.progress);
+      slide.position.x = T.MathUtils.lerp(
+        slide.position.x,
+        -0.1 +
+          Math.max(
+            pose.pull * 0.27,
+            s.flash || (!s.chamber && s.motion !== 3) ? 0.12 : 0,
+          ),
+        0.35,
+      );
+      mag.position.y = T.MathUtils.lerp(
+        mag.position.y,
+        -0.3 - pose.drop * 0.65,
+        0.3,
+      );
+      mag.position.x = 0.34 + pose.drop * 0.12;
+      mag.rotation.z = 0.22 + pose.drop * 0.15;
+      gun.rotation.z = (s.flash ? -0.07 : 0) + pose.tilt * -0.1;
+      gun.position.y = pose.tilt * 0.13;
+      hand.visible = pose.hand > 0;
+      hand.scale.setScalar(pose.hand);
+      hand.position.set(
+        pose.rack ? 0.15 + pose.pull * 0.27 : mag.position.x + 0.05,
+        pose.rack ? 0.36 : mag.position.y - 0.05,
+        0.06,
+      );
       r.render(scene, cam);
       id = requestAnimationFrame(loop);
     };
@@ -416,11 +469,13 @@ function Host() {
               <span className="eyebrow">SIDEARM / SEMI-AUTO</span>
               <b>P-12 SERVICE PISTOL</b>
               <span>
-                {hud.reload
-                  ? reloadLabels[hud.reload]
-                  : hud.chamber
-                    ? '약실 장전됨'
-                    : '약실 비어 있음 · 장전 필요'}
+                {hud.reloadMotion
+                  ? RELOAD_NAMES[hud.reloadMotion]
+                  : hud.reload
+                    ? reloadLabels[hud.reload]
+                    : hud.chamber
+                      ? '약실 장전됨'
+                      : '약실 비어 있음 · 장전 필요'}
               </span>
             </div>
             <div className="ammo">
@@ -435,6 +490,17 @@ function Host() {
             </div>
           </div>
           <div className="hit-text">{hud.hit}</div>
+          {!!hud.reloadMotion && (
+            <div className="reload-status">
+              <span>
+                {RELOAD_NAMES[hud.reloadMotion]} <b>{hud.reloadMotion} / 3</b>
+              </span>
+              <Progress
+                value={(hud.reloadProgress || 0) * 100}
+                aria-label="장전 동작 진행률"
+              />
+            </div>
+          )}
           {hud.state === 'playing' && (
             <button
               className="pause quiet"
@@ -536,7 +602,10 @@ function Host() {
           className="quiet"
           onClick={() => game.current?.action('reload')}
         >
-          <b>R</b> {reloadLabels[hud.reload]}
+          <b>R</b>{' '}
+          {hud.reloadMotion
+            ? RELOAD_NAMES[hud.reloadMotion]
+            : reloadLabels[hud.reload]}
         </button>
         <span>
           <b>ESC</b> 일시정지
@@ -600,6 +669,7 @@ function Controller() {
       action === 'fire' &&
       hudRef.current.state === 'playing' &&
       hudRef.current.chamber &&
+      !hudRef.current.reloadMotion &&
       !hudRef.current.reload
     ) {
       navigator.vibrate?.(30);
@@ -869,7 +939,13 @@ function Controller() {
                       : '화면을 드래그해 조준'}
                   </span>
                 </div>
-                <Weapon reload={hud.reload} flash={flash} />
+                <Weapon
+                  reload={hud.reload}
+                  flash={flash}
+                  motion={hud.reloadMotion}
+                  progress={hud.reloadProgress}
+                  chamber={hud.chamber}
+                />
                 <div className="weapon-caption">
                   <span>
                     {hud.chamber ? '● 약실 장전' : '○ 약실 비어 있음'}
@@ -881,9 +957,12 @@ function Controller() {
                 <button
                   className="reload-button"
                   onClick={() => sendAction('reload')}
+                  disabled={!!hud.reloadMotion}
                 >
                   <RotateCcw size={20} />
-                  {reloadLabels[hud.reload]}
+                  {hud.reloadMotion
+                    ? RELOAD_NAMES[hud.reloadMotion]
+                    : reloadLabels[hud.reload]}
                   <small>{hud.reload + 1} / 3</small>
                 </button>
                 <button
