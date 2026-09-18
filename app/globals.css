@@ -920,3 +920,102 @@ footer {
 .weapon-label {
   max-width: 65%;
 }
+/* Active play occupies the viewport; setup remains available from pause. */
+.arena.play-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+.shell:has(.play-expanded) > header,
+.shell:has(.play-expanded) > footer,
+.shell:has(.play-expanded) .topline,
+.shell:has(.play-expanded) .console,
+.shell:has(.play-expanded) .underbar,
+.shell:has(.play-expanded) .mission-note {
+  display: none;
+}
+.shell:has(.play-expanded) .host-grid {
+  border: 0;
+}
+.fullscreen-button {
+  position: absolute;
+  right: 70px;
+  top: 90px;
+  z-index: 4;
+  background: #0b171cba;
+}
+.arena:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  max-height: none;
+}
+.play-expanded .overlay,
+.arena:fullscreen .overlay {
+  align-items: center;
+  text-align: center;
+}
+.play-expanded .hud-top {
+  top: max(26px, env(safe-area-inset-top));
+  left: max(32px, env(safe-area-inset-left));
+  right: max(32px, env(safe-area-inset-right));
+}
+.play-expanded .hud-bottom {
+  bottom: 46px;
+  left: 32px;
+  right: 32px;
+}
+.play-shortcuts {
+  position: absolute;
+  bottom: 12px;
+  left: 32px;
+  display: flex;
+  gap: 20px;
+  color: #aebdc0;
+  font-size: 12px;
+  pointer-events: none;
+  text-shadow: 0 1px 3px #000;
+}
+.play-error {
+  position: absolute;
+  top: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  z-index: 5;
+  color: #ffd2b8;
+  background: #311d17ed;
+  padding: 10px 16px;
+  font-size: 14px;
+}
+.play-expanded .reload-status {
+  bottom: 130px;
+  left: 32px;
+}
+@media (max-width: 550px) {
+  .play-shortcuts {
+    gap: 10px;
+    left: 16px;
+    font-size: 11px;
+  }
+  .play-expanded .hud-top {
+    left: 16px;
+    right: 16px;
+  }
+  .play-expanded .hud-bottom {
+    left: 16px;
+    right: 16px;
+  }
+  .play-expanded .reload-status {
+    left: 16px;
+  }
+  .play-expanded .overlay h2 {
+    font-size: 30px;
+  }
+}

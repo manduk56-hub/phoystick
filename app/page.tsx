@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Link2,
   ScanLine,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import {
@@ -226,7 +228,11 @@ function Host() {
     [error, setError] = useState(''),
     [qr, setQr] = useState(''),
     [busy, setBusy] = useState(false),
+    [showSetup, setShowSetup] = useState(false),
+    [fullscreen, setFullscreen] = useState(false),
     [mode, setMode] = useState<'mouse' | 'phone'>('mouse');
+  const arena = useRef<HTMLElement>(null);
+  const expanded = hud.state !== 'ready' && !showSetup;
   const canvas = useRef<HTMLCanvasElement>(null),
     game = useRef<Game | null>(null),
     link = useRef<Link | null>(null),
@@ -236,6 +242,36 @@ function Host() {
     modeRef = useRef(mode);
   hudRef.current = hud;
   modeRef.current = mode;
+  useEffect(() => {
+    if (hud.state === 'playing') setShowSetup(false);
+  }, [hud.state]);
+  useEffect(() => {
+    if (!expanded) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [expanded]);
+  useEffect(() => {
+    const update = () =>
+      setFullscreen(document.fullscreenElement === arena.current);
+    document.addEventListener('fullscreenchange', update);
+    return () => document.removeEventListener('fullscreenchange', update);
+  }, []);
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (arena.current?.requestFullscreen)
+        await arena.current.requestFullscreen();
+      else
+        setError(
+          '이 브라우저에서는 전체화면을 지원하지 않습니다. 브라우저 창을 최대화해 주세요.',
+        );
+    } catch {
+      setError('전체화면을 열지 못했습니다. 브라우저 창을 최대화해 주세요.');
+    }
+  }
   useEffect(() => {
     let g: Game;
     try {
@@ -380,7 +416,8 @@ function Host() {
       </div>
       <div className="host-grid">
         <section
-          className="arena"
+          ref={arena}
+          className={'arena' + (expanded ? ' play-expanded' : '')}
           onPointerMove={mouse}
           onPointerDown={(e) => {
             if (
@@ -462,6 +499,18 @@ function Host() {
                   마우스로 먼저 플레이
                 </button>
               )}
+              {hud.state !== 'ready' && !showSetup && (
+                <button
+                  className="text-button"
+                  onClick={async () => {
+                    if (document.fullscreenElement)
+                      await document.exitFullscreen().catch(() => {});
+                    setShowSetup(true);
+                  }}
+                >
+                  폰 연결 · 조작 설정
+                </button>
+              )}
             </div>
           )}
           <div className="hud-bottom">
@@ -490,6 +539,25 @@ function Host() {
             </div>
           </div>
           <div className="hit-text">{hud.hit}</div>
+          <button
+            className="fullscreen-button quiet"
+            aria-label={fullscreen ? '전체화면 종료' : '전체화면'}
+            title={fullscreen ? '전체화면 종료' : '브라우저 전체화면'}
+            onClick={toggleFullscreen}
+          >
+            {fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
+          {expanded && (
+            <div className="play-shortcuts">
+              클릭 / 폰 동작 : 발사 <span>R : 장전</span>
+              <span>ESC : 일시정지</span>
+            </div>
+          )}
+          {expanded && error && (
+            <div className="play-error" role="alert">
+              {error}
+            </div>
+          )}
           {!!hud.reloadMotion && (
             <div className="reload-status">
               <span>
