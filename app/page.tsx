@@ -31,6 +31,7 @@ import {
 } from '@/lib/aim';
 import { api, Link, type Packet } from '@/lib/link';
 import * as T from 'three';
+import { rounded, finish, organic } from '@/lib/surface';
 import { RELOAD_NAMES, reloadPose } from '@/lib/reload-motion';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -91,10 +92,7 @@ function Weapon({
       d: number,
       color: number,
     ) => {
-      const m = new T.Mesh(
-        new T.BoxGeometry(w, h, d),
-        new T.MeshStandardMaterial({ color, metalness: 0.6, roughness: 0.4 }),
-      );
+      const m = new T.Mesh(rounded(w, h, d), finish(color, 'metal'));
       m.position.set(x, y, 0);
       gun.add(m);
       return m;
@@ -116,14 +114,14 @@ function Weapon({
     gun.add(guard);
     const hand = new T.Group();
     const glove = new T.Mesh(
-      new T.BoxGeometry(0.28, 0.2, 0.3),
-      new T.MeshStandardMaterial({ color: 0x54666b, roughness: 0.8 }),
+      organic(0.28, 0.2, 0.3),
+      finish(0x54666b, 'fabric'),
     );
     hand.add(glove);
     for (let i = 0; i < 3; i++) {
       const finger = new T.Mesh(
-        new T.BoxGeometry(0.06, 0.08, 0.32),
-        new T.MeshStandardMaterial({ color: 0x90a29a, roughness: 0.8 }),
+        rounded(0.06, 0.08, 0.32),
+        finish(0x90a29a, 'fabric'),
       );
       finger.position.set(-0.09 + i * 0.09, 0.12, 0);
       hand.add(finger);

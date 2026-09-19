@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { rounded, finish, organic } from './surface.ts';
 import { FishingModel } from './fishing-model.ts';
 export class FishingScene {
   renderer: T.WebGLRenderer;
@@ -89,12 +90,13 @@ export class FishingScene {
     }
     for (let i = 0; i < 12; i++) {
       const segment = new T.Mesh(
-        new T.CylinderGeometry(0.024 - i * 0.0013, 0.026 - i * 0.0013, 0.33, 8),
-        new T.MeshStandardMaterial({
-          color: i < 3 ? 0x96724b : 0x263f43,
-          roughness: 0.5,
-          metalness: 0.4,
-        }),
+        new T.CylinderGeometry(
+          0.024 - i * 0.0013,
+          0.026 - i * 0.0013,
+          0.33,
+          24,
+        ),
+        finish(i < 3 ? 0x96724b : 0x263f43, i < 3 ? 'cork' : 'metal'),
       );
       segment.position.y = i * 0.31;
       this.rod.add(segment);
@@ -102,7 +104,7 @@ export class FishingScene {
     }
     this.reel = new T.Group();
     const spool = new T.Mesh(
-      new T.CylinderGeometry(0.14, 0.14, 0.18, 18),
+      new T.CylinderGeometry(0.14, 0.14, 0.18, 32),
       new T.MeshStandardMaterial({
         color: 0xd0b787,
         metalness: 0.8,
@@ -112,7 +114,7 @@ export class FishingScene {
     spool.rotation.z = Math.PI / 2;
     this.reel.add(spool);
     const handle = new T.Mesh(
-      new T.BoxGeometry(0.05, 0.24, 0.05),
+      rounded(0.05, 0.24, 0.05),
       new T.MeshStandardMaterial({ color: 0x142b32 }),
     );
     handle.position.y = 0.12;
@@ -132,17 +134,13 @@ export class FishingScene {
     );
     this.scene.add(this.line);
     const body = new T.Mesh(
-      new T.SphereGeometry(0.55, 20, 14),
-      new T.MeshStandardMaterial({
-        color: 0x86b6a1,
-        metalness: 0.4,
-        roughness: 0.3,
-      }),
+      new T.SphereGeometry(0.55, 40, 28),
+      finish(0x86b6a1, 'scales'),
     );
     body.scale.set(1.9, 0.7, 0.45);
     this.fish.add(body);
     const tail = new T.Mesh(
-      new T.ConeGeometry(0.4, 0.65, 3),
+      organic(0.7, 0.8, 0.15),
       new T.MeshStandardMaterial({ color: 0x50847c, side: T.DoubleSide }),
     );
     tail.rotation.z = -Math.PI / 2;
@@ -155,6 +153,24 @@ export class FishingScene {
     );
     eye.position.set(0.68, 0.15, 0.24);
     this.fish.add(eye);
+    const otherEye = eye.clone();
+    otherEye.position.z = -0.24;
+    this.fish.add(otherEye);
+    for (const z of [-0.16, 0.16]) {
+      const fin = new T.Mesh(
+        organic(0.48, 0.12, 0.42),
+        finish(0x4b8075, 'scales'),
+      );
+      fin.position.set(-0.05, -0.17, z);
+      fin.rotation.x = z > 0 ? 0.5 : -0.5;
+      this.fish.add(fin);
+    }
+    const dorsal = new T.Mesh(
+      organic(0.8, 0.3, 0.075),
+      finish(0x557f71, 'scales'),
+    );
+    dorsal.position.set(-0.15, 0.36, 0);
+    this.fish.add(dorsal);
     this.scene.add(this.fish);
     this.resize = new ResizeObserver(() => {
       const w = canvas.clientWidth,

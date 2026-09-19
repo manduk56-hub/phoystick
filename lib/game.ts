@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { rounded, finish, organic } from './surface.ts';
 import { RELOAD_SECONDS, reloadPose } from './reload-motion.ts';
 export type HUD = {
   health: number;
@@ -159,10 +160,7 @@ export class Game {
     this.emit();
   }
   box(w: number, h: number, d: number, c: number) {
-    return new T.Mesh(
-      new T.BoxGeometry(w, h, d),
-      new T.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.25 }),
-    );
+    return new T.Mesh(rounded(w, h, d), finish(c, 'metal'));
   }
   emit() {
     this.notify({ ...this.hud });
@@ -238,8 +236,7 @@ export class Game {
     if (this.hud.reload === 0) {
       this.hud.reload = 1;
       this.hud.ammo = 0;
-    }
-    else if (this.hud.reload === 1) {
+    } else if (this.hud.reload === 1) {
       this.hud.ammo = 12;
       this.hud.reload = 2;
     } else {
@@ -327,7 +324,10 @@ export class Game {
       y: number,
       z = 0,
     ) => {
-      const m = this.box(w, h, d, c);
+      const m = new T.Mesh(
+        organic(w, h, d),
+        finish(c, c === 0xc4d796 ? 'skin' : 'fabric'),
+      );
       m.position.set(x, y, z);
       group.add(m);
       parts.push(m);
@@ -345,21 +345,17 @@ export class Game {
       const eye = add(0.06, 0.045, 0.025, 0xe8f4ad, x, 1.79, 0.21);
       (eye.material as T.MeshStandardMaterial).emissive.setHex(0xff704d);
     }
+    add(0.15, 0.16, 0.12, skin, 0, 1.69, 0.18);
+    add(0.09, 0.1, 0.085, skin, 0, 1.78, 0.2);
+    add(0.2, 0.035, 0.03, 0x514b3b, 0, 1.65, 0.2);
+    for (const x of [-0.23, 0.23]) add(0.095, 0.14, 0.1, skin, x, 1.76);
+    for (const x of [-0.44, 0.44]) add(0.22, 0.2, 0.19, skin, x, 0.99, 0.52);
     for (const part of parts) {
       const material = part.material as T.MeshStandardMaterial;
       material.emissive.setHex(0x614926);
       material.emissiveIntensity = 0.3;
       material.metalness = 0;
       material.roughness = 0.9;
-      const edge = new T.LineSegments(
-        new T.EdgesGeometry(part.geometry),
-        new T.LineBasicMaterial({
-          color: 0xffd783,
-          transparent: true,
-          opacity: 0.65,
-        }),
-      );
-      part.add(edge);
     }
     group.position.set((Math.random() - 0.5) * 11, 0, -35 - Math.random() * 9);
     this.scene.add(group);

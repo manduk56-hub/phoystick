@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { rounded, finish, organic } from './surface.ts';
 import {
   RacingModel,
   roadX,
@@ -19,11 +20,13 @@ function car(color: number) {
     z: number,
   ) => {
     const mesh = new T.Mesh(
-      new T.BoxGeometry(w, h, d),
-      new T.MeshStandardMaterial({
+      rounded(w, h, d),
+      new T.MeshPhysicalMaterial({
         color: c,
-        roughness: 0.35,
-        metalness: 0.35,
+        roughness: 0.25,
+        metalness: 0.5,
+        clearcoat: 1,
+        clearcoatRoughness: 0.18,
       }),
     );
     mesh.position.set(x, y, z);
@@ -31,18 +34,42 @@ function car(color: number) {
     return mesh;
   };
   box(1.65, 0.45, 3.6, color, 0, 0.65, 0);
-  box(1.4, 0.46, 1.6, 0x172b3a, 0, 1.1, 0.05);
-  box(1.45, 0.12, 1.55, color, 0, 1.37, 0.1);
+  const canopy = new T.Mesh(
+    organic(1.46, 1.08, 2.05),
+    new T.MeshPhysicalMaterial({
+      color: 0x203b4c,
+      metalness: 0.55,
+      roughness: 0.12,
+      clearcoat: 1,
+    }),
+  );
+  canopy.position.set(0, 0.95, 0.08);
+  group.add(canopy);
+  const roof=new T.Mesh(organic(1.3,.16,1.4),finish(color));roof.position.set(0,1.4,.1);group.add(roof);
   box(1.75, 0.12, 0.3, 0x10151f, 0, 1.08, 1.6);
   for (const x of [-0.87, 0.87])
     for (const z of [-1.12, 1.12]) {
       const wheel = new T.Mesh(
-        new T.CylinderGeometry(0.36, 0.36, 0.24, 12),
+        new T.CylinderGeometry(0.36, 0.36, 0.24, 40),
         new T.MeshStandardMaterial({ color: 0x12141b }),
       );
       wheel.rotation.z = Math.PI / 2;
       wheel.position.set(x, 0.38, z);
       group.add(wheel);
+      const rim = new T.Mesh(
+        new T.CylinderGeometry(0.23, 0.23, 0.255, 32),
+        finish(0xb4c4d0),
+      );
+      rim.rotation.z = Math.PI / 2;
+      rim.position.copy(wheel.position);
+      group.add(rim);
+      const cap = new T.Mesh(
+        new T.CylinderGeometry(0.075, 0.075, 0.27, 24),
+        finish(0x303c47),
+      );
+      cap.rotation.z = Math.PI / 2;
+      cap.position.copy(wheel.position);
+      group.add(cap);
     }
   for (const x of [-0.58, 0.58]) {
     box(0.35, 0.1, 0.05, 0xff3b48, x, 0.76, 1.82);
@@ -93,10 +120,10 @@ export class RacingScene {
     this.scene.add(sunDisc);
     for (let i = 0; i < 15; i++) {
       const mountain = new T.Mesh(
-        new T.ConeGeometry(40 + (i % 3) * 20, 45 + (i % 4) * 25, 5),
+        organic(100 + (i % 3) * 35, 100 + (i % 4) * 40, 95),
         new T.MeshStandardMaterial({
           color: i % 2 ? 0x82687e : 0x997c8b,
-          flatShading: true,
+          flatShading: false,
           fog: false,
         }),
       );
@@ -148,10 +175,10 @@ export class RacingScene {
     for (let i = 0; i < 32; i++) {
       const g = new T.Group();
       const rock = new T.Mesh(
-        new T.DodecahedronGeometry(1.5 + (i % 4)),
+        new T.DodecahedronGeometry(1.5 + (i % 4), 2),
         new T.MeshStandardMaterial({
           color: i % 2 ? 0x9a6f61 : 0xb2876c,
-          flatShading: true,
+          flatShading: false,
         }),
       );
       rock.scale.y = 1.5 + (i % 3);
