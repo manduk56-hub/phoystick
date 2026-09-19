@@ -30,7 +30,9 @@ export async function POST(req: Request) {
             token,
             Date.now() + 7200000,
             JSON.stringify({
-              game: b.game === 'fishing' ? 'fishing' : 'shooting',
+              game: ['fishing', 'racing'].includes(b.game)
+                ? b.game
+                : 'shooting',
             }),
           )
           .run();
@@ -53,9 +55,11 @@ export async function POST(req: Request) {
         return json(
           {
             error:
-              roomGame === 'fishing'
-                ? '낚시게임의 코드입니다. 낚시 컨트롤러에서 연결해 주세요.'
-                : '좀비 슈팅의 코드입니다. 슈팅 컨트롤러에서 연결해 주세요.',
+              roomGame === 'racing'
+                ? '레이싱게임의 코드입니다. 레이싱 컨트롤러에서 연결해 주세요.'
+                : roomGame === 'fishing'
+                  ? '낚시게임의 코드입니다. 낚시 컨트롤러에서 연결해 주세요.'
+                  : '좀비 슈팅의 코드입니다. 슈팅 컨트롤러에서 연결해 주세요.',
           },
           400,
         );

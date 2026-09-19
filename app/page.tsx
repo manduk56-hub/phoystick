@@ -209,7 +209,12 @@ export default function Home() {
         <a className="brand" href="/">
           ◈ <b>DEAD SIGNAL</b>
         </a>
-        <a className="quiet" href="/fishing">낚시게임 · STILLWATER ↗</a>
+        <a className="quiet" href="/fishing">
+          낚시 · STILLWATER ↗
+        </a>
+        <a className="quiet" href="/racing">
+          레이싱 · APEX DRIVE ↗
+        </a>
         <button
           className="quiet role-toggle"
           onClick={() => setRole(role === 'host' ? 'phone' : 'host')}

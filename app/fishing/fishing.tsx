@@ -159,6 +159,7 @@ export default function Fishing() {
       <header className="fish-header">
         <a href="/">← 좀비 슈팅</a>
         <b>STILLWATER</b>
+        <a href="/racing">레이싱 ↗</a>
         <button
           className="quiet"
           onClick={() => setRole((v) => (v === 'host' ? 'phone' : 'host'))}

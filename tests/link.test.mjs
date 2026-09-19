@@ -48,10 +48,59 @@ assert.equal(
 console.log(
   'PASS: create, pair, duplicate protection, token authorization, role permissions, signaling, control relay and HUD sync',
 );
-const fishHost=await call('create',{game:'fishing'});
-assert.equal((await call('join',{code:fishHost.data.code})).status,400);
-const fishPhone=await call('join',{code:fishHost.data.code,game:'fishing'});
-assert.equal(fishPhone.status,200);
-await call('input',{...fishPhone.data,data:{x:.5,y:.5,events:[{id:1,action:'cast',value:.75}],time:Date.now()}});
-assert.equal(JSON.parse((await call('read',fishHost.data)).data.input).events[0].value,.75);
+const fishHost = await call('create', { game: 'fishing' });
+assert.equal((await call('join', { code: fishHost.data.code })).status, 400);
+const fishPhone = await call('join', {
+  code: fishHost.data.code,
+  game: 'fishing',
+});
+assert.equal(fishPhone.status, 200);
+await call('input', {
+  ...fishPhone.data,
+  data: {
+    x: 0.5,
+    y: 0.5,
+    events: [{ id: 1, action: 'cast', value: 0.75 }],
+    time: Date.now(),
+  },
+});
+assert.equal(
+  JSON.parse((await call('read', fishHost.data)).data.input).events[0].value,
+  0.75,
+);
 console.log('PASS: fishing pairing, cross-game rejection and casting relay');
+const raceHost = await call('create', { game: 'racing' });
+assert.equal(raceHost.status, 200);
+assert.equal(
+  (await call('join', { code: raceHost.data.code, game: 'fishing' })).status,
+  400,
+);
+assert.equal((await call('join', { code: raceHost.data.code })).status, 400);
+const racePhone = await call('join', {
+  code: raceHost.data.code,
+  game: 'racing',
+});
+assert.equal(racePhone.status, 200);
+await call('input', {
+  ...racePhone.data,
+  data: {
+    drive: { steer: -0.5, throttle: 0.75, brake: 0 },
+    events: [],
+    time: Date.now(),
+  },
+});
+assert.equal(
+  JSON.parse((await call('read', raceHost.data)).data.input).drive.throttle,
+  0.75,
+);
+await call('status', {
+  ...raceHost.data,
+  data: { game: 'racing', phase: 'racing', speed: 35, time: Date.now() },
+});
+assert.equal(
+  JSON.parse((await call('read', racePhone.data)).data.status).speed,
+  35,
+);
+console.log(
+  'PASS: racing pairing, game isolation, steering/pedal relay and speed sync',
+);
