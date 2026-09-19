@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { gameModel, disposeModel } from './graphics-assets.ts';
 import { rounded, finish } from './surface.ts';
 
 export class Cockpit extends T.Group {
@@ -7,6 +8,57 @@ export class Cockpit extends T.Group {
   display: HTMLCanvasElement;
   texture: T.CanvasTexture;
   lastSpeed = -1;
+  disposed = false;
+  screen!: T.Mesh;
+  async loadDetailed() {
+    const asset = await gameModel('car');
+    if (this.disposed) {
+      disposeModel(asset.scene);
+      return;
+    }
+    for (const child of [...this.children]) {
+      if (child !== this.screen) {
+        this.remove(child);
+        disposeModel(child);
+      }
+    }
+    this.pillars = [];
+    const body = asset.scene;
+    body.rotation.y = Math.PI;
+    body.position.set(0, -0.96, 0.35);
+    this.add(body);
+    body.traverse((o) => {
+      if (/BodyRoofPanel|InteriorSeats|InteriorRear|InteriorCage/.test(o.name))
+        o.visible = false;
+      if (o instanceof T.Mesh) {
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+          if (m instanceof T.MeshStandardMaterial) {
+            m.envMapIntensity = 1.1;
+            m.fog = false;
+            if (m.name === 'Glass') {
+              m.transparent = true;
+              m.opacity = 0.07;
+              m.depthWrite = false;
+              if (m instanceof T.MeshPhysicalMaterial) m.transmission = 0;
+            }
+          }
+        }
+      }
+    });
+    body.updateMatrixWorld(true);
+    const parts: T.Object3D[] = [];
+    body.traverse((o) => {
+      if (/^InteriorSteeringWheel|^InteriorSteeringEmblem/.test(o.name))
+        parts.push(o);
+    });
+    this.wheel = new T.Group();
+    this.wheel.position.set(0, -0.306, -0.585);
+    this.add(this.wheel);
+    this.updateMatrixWorld(true);
+    parts.forEach((o) => this.wheel.attach(o));
+    this.screen.scale.set(0.39, 0.39, 1);
+    this.screen.position.set(0, -0.193, -0.873);
+  }
   constructor() {
     super();
     const panel = (
@@ -67,6 +119,7 @@ export class Cockpit extends T.Group {
       new T.MeshBasicMaterial({ map: this.texture, toneMapped: false }),
     );
     screen.position.set(-0.27, -0.56, -1.295);
+    this.screen = screen;
     this.add(screen);
     this.traverse((o) => {
       if (o instanceof T.Mesh) {

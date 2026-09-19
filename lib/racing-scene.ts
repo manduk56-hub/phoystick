@@ -1,4 +1,12 @@
 import * as T from 'three';
+import {
+  cinematicLight,
+  scannedMaterial,
+  assetNotice,
+  gameModel,
+  disposeModel,
+  fitModel,
+} from './graphics-assets.ts';
 import { Cockpit } from './racing-cockpit.ts';
 import { rounded, finish, organic } from './surface.ts';
 import {
@@ -92,6 +100,37 @@ export class RacingScene {
   strips: { mesh: T.Mesh; left: number; right: number; height: number }[] = [];
   scenery: T.Group[] = [];
   finish = new T.Group();
+  disposed = false;
+  releaseLook: () => void;
+  notice: ReturnType<typeof assetNotice>;
+  detailedTraffic: T.Group[] = [];
+  async loadTraffic() {
+    for (let i = 0; i < 6; i++) {
+      const a = await gameModel('car');
+      if (this.disposed) {
+        disposeModel(a.scene);
+        return;
+      }
+      const m = fitModel(a.scene, 1.85, 'x');
+      a.scene.rotation.y = Math.PI;
+      a.scene.traverse((o) => {
+        if (o instanceof T.Mesh) {
+          for (const mat of Array.isArray(o.material)
+            ? o.material
+            : [o.material]) {
+            if (mat instanceof T.MeshPhysicalMaterial && mat.transmission > 0) {
+              mat.transmission = 0;
+              mat.transparent = true;
+              mat.opacity = 0.3;
+            }
+          }
+        }
+      });
+      m.visible = false;
+      this.scene.add(m);
+      this.detailedTraffic.push(m);
+    }
+  }
   frame = 0;
   last = 0;
   emit = 0;
@@ -102,20 +141,38 @@ export class RacingScene {
   ) {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
-    this.renderer.setClearColor(0xc99591);
+    this.renderer.setClearColor(0xaebcc4);
+    this.releaseLook = cinematicLight(this.renderer, this.scene, 0.85, true);
+    this.notice = assetNotice(canvas, '차량 모델');
     this.cockpit = new Cockpit();
+    void this.cockpit
+      .loadDetailed()
+      .then(() => this.notice.done())
+      .catch(() => this.notice.fail());
+    void this.loadTraffic().catch(() => {});
     this.camera.add(this.cockpit);
     this.scene.add(this.camera);
     this.camera.position.set(-0.3, 1.35, 0.25);
-    this.scene.fog = new T.Fog(0xc99591, 100, 440);
-    this.scene.add(new T.HemisphereLight(0xb5e0ff, 0xb36350, 2.7));
+    this.scene.fog = new T.Fog(0xaebcc4, 100, 440);
+    this.scene.add(new T.HemisphereLight(0xb5e0ff, 0x776b55, 1.5));
     const sun = new T.DirectionalLight(0xffe3ad, 3);
     sun.position.set(-40, 65, -110);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -25;
+    sun.shadow.camera.right = 25;
+    sun.shadow.camera.top = 25;
+    sun.shadow.camera.bottom = -25;
+    sun.shadow.camera.far = 220;
+    sun.shadow.bias = -0.0004;
+    sun.target.position.set(0, 0, -25);
+    this.scene.add(sun.target);
     this.scene.add(sun);
     const ground = new T.Mesh(
       new T.PlaneGeometry(1800, 1800),
-      new T.MeshStandardMaterial({ color: 0x987367, roughness: 1 }),
+      scannedMaterial('rock_boulder_dry', 90),
     );
+    ground.receiveShadow = true;
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.08;
     this.scene.add(ground);
@@ -124,16 +181,27 @@ export class RacingScene {
       new T.MeshBasicMaterial({ color: 0xffd7a1, fog: false }),
     );
     sunDisc.position.set(-145, 100, -440);
+    sunDisc.visible = false;
     this.scene.add(sunDisc);
     for (let i = 0; i < 15; i++) {
+      const terrain = new T.IcosahedronGeometry(1, 4);
+      const vertices = terrain.attributes.position;
+      for (let k = 0; k < vertices.count; k++) {
+        const x = vertices.getX(k),
+          y = vertices.getY(k),
+          z = vertices.getZ(k),
+          r =
+            1 +
+            0.1 * Math.sin(x * 17 + y * 11) * Math.cos(z * 13) +
+            0.07 * Math.sin(z * 29 + x * 19);
+        vertices.setXYZ(k, x * r, y * r, z * r);
+      }
+      terrain.computeVertexNormals();
       const mountain = new T.Mesh(
-        organic(100 + (i % 3) * 35, 100 + (i % 4) * 40, 95),
-        new T.MeshStandardMaterial({
-          color: i % 2 ? 0x82687e : 0x997c8b,
-          flatShading: false,
-          fog: false,
-        }),
+        terrain,
+        scannedMaterial('rock_boulder_dry', 8),
       );
+      mountain.scale.set(75 + (i % 3) * 25, 60 + (i % 4) * 30, 65);
       mountain.position.set(-500 + i * 75, 15, -360 - (i % 3) * 60);
       this.scene.add(mountain);
     }
@@ -150,8 +218,24 @@ export class RacingScene {
       );
       const m = new T.Mesh(
         g,
-        new T.MeshBasicMaterial({ color, side: T.DoubleSide }),
+        left === -5.3
+          ? scannedMaterial('asphalt_02')
+          : new T.MeshBasicMaterial({ color, side: T.DoubleSide }),
       );
+      g.setAttribute(
+        'uv',
+        new T.BufferAttribute(new Float32Array(120 * 12), 2),
+      );
+      g.setAttribute(
+        'normal',
+        new T.BufferAttribute(
+          Float32Array.from({ length: 120 * 18 }, (_, i) =>
+            i % 3 === 1 ? 1 : 0,
+          ),
+          3,
+        ),
+      );
+      m.receiveShadow = true;
       m.frustumCulled = false;
       this.scene.add(m);
       this.strips.push({ mesh: m, left, right, height });
@@ -183,10 +267,7 @@ export class RacingScene {
       const g = new T.Group();
       const rock = new T.Mesh(
         new T.DodecahedronGeometry(1.5 + (i % 4), 2),
-        new T.MeshStandardMaterial({
-          color: i % 2 ? 0x9a6f61 : 0xb2876c,
-          flatShading: false,
-        }),
+        scannedMaterial('rock_boulder_dry', 2),
       );
       rock.scale.y = 1.5 + (i % 3);
       rock.position.y = 1;
@@ -267,9 +348,16 @@ export class RacingScene {
         if (strip.left > -2 && strip.right < 2 && Math.floor(z0 / 8) % 2 === 0)
           v.fill(0);
         a.set(v, i * 18);
+        (strip.mesh.geometry.attributes.uv.array as Float32Array).set(
+          [0, z0 / 8, 2, z0 / 8, 0, z1 / 8, 0, z1 / 8, 2, z0 / 8, 2, z1 / 8],
+          i * 12,
+        );
       }
       pos.needsUpdate = true;
+      strip.mesh.geometry.attributes.uv.needsUpdate = true;
     }
+    let detailIndex = 0;
+    this.detailedTraffic.forEach((m) => (m.visible = false));
     for (let i = 0; i < this.traffic.length; i++) {
       const c = this.model.traffic[i],
         m = this.traffic[i],
@@ -277,6 +365,13 @@ export class RacingScene {
       m.visible = z > -18 && z < 450;
       m.position.set(roadX(c.z) - origin + c.lane, 0, -z);
       m.rotation.y = -roadSlope(c.z);
+      if (z > -18 && z < 150 && detailIndex < this.detailedTraffic.length) {
+        const real = this.detailedTraffic[detailIndex++];
+        real.visible = true;
+        real.position.copy(m.position);
+        real.rotation.copy(m.rotation);
+        m.visible = false;
+      }
     }
     this.scenery.forEach((m, i) => {
       const spacing = i < 48 ? 18 : 31,
@@ -311,6 +406,10 @@ export class RacingScene {
     this.frame = requestAnimationFrame(this.loop);
   };
   dispose() {
+    this.disposed = true;
+    this.cockpit.disposed = true;
+    this.releaseLook();
+    this.notice.dispose();
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     this.scene.traverse((o) => {

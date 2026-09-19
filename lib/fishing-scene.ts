@@ -1,4 +1,11 @@
 import * as T from 'three';
+import {
+  gameModel,
+  disposeModel,
+  fitModel,
+  cinematicLight,
+  assetNotice,
+} from './graphics-assets.ts';
 import { rounded, finish, organic } from './surface.ts';
 import { FishingModel } from './fishing-model.ts';
 export class FishingScene {
@@ -22,6 +29,10 @@ export class FishingScene {
   emit = 0;
   audio: AudioContext | null = null;
   lastPhase = 'ready';
+  disposed = false;
+  releaseLook: () => void = () => {};
+  notice?: ReturnType<typeof assetNotice>;
+  fishVertices: { mesh: T.Mesh; base: Float32Array }[] = [];
   constructor(canvas: HTMLCanvasElement, onState: (s: any) => void) {
     this.onState = onState;
     this.renderer = new T.WebGLRenderer({
@@ -31,6 +42,9 @@ export class FishingScene {
     });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
     this.renderer.setClearColor(0, 0);
+    this.releaseLook = cinematicLight(this.renderer, this.scene, 1.1);
+    this.notice = assetNotice(canvas, '물고기 모델');
+    void this.loadFish();
     this.camera.position.set(0, 3.4, 8);
     this.camera.lookAt(0, 1.1, -16);
     this.scene.add(new T.HemisphereLight(0xe2f5e8, 0x2c5155, 2.6));
@@ -123,6 +137,26 @@ export class FishingScene {
     this.rod.add(this.reel);
     this.rod.position.set(0.8, 1, 6.2);
     this.rod.rotation.set(-0.7, 0, -0.3);
+    for (let i = 3; i < 12; i++) {
+      const guide = new T.Mesh(
+        new T.TorusGeometry(0.036 - i * 0.0015, 0.004, 8, 24),
+        finish(0xa4b8bd),
+      );
+      guide.position.set(0, i * 0.31, -0.025);
+      this.rod.add(guide);
+    }
+    const grip = new T.Mesh(
+      new T.CylinderGeometry(0.044, 0.047, 0.68, 32),
+      finish(0x96724b, 'cork'),
+    );
+    grip.position.y = 0.12;
+    this.rod.add(grip);
+    const bail = new T.Mesh(
+      new T.TorusGeometry(0.155, 0.009, 8, 40, Math.PI * 1.65),
+      finish(0xdbe5de),
+    );
+    bail.rotation.y = Math.PI / 2;
+    this.reel.add(bail);
     this.scene.add(this.rod);
     this.line = new T.Line(
       new T.BufferGeometry(),
@@ -182,6 +216,36 @@ export class FishingScene {
     });
     this.resize.observe(canvas);
     this.frame = requestAnimationFrame((t) => this.tick(t));
+  }
+  async loadFish() {
+    try {
+      const a = await gameModel('fish');
+      if (this.disposed) {
+        disposeModel(a.scene);
+        return;
+      }
+      this.fish.children.slice().forEach((c) => {
+        this.fish.remove(c);
+        disposeModel(c);
+      });
+      const fitted = fitModel(a.scene, 2.2, 'z');
+      fitted.rotation.y = Math.PI / 2;
+      this.fish.add(fitted);
+      a.scene.traverse((o) => {
+        if (o instanceof T.Mesh) {
+          this.fishVertices.push({
+            mesh: o,
+            base: new Float32Array(o.geometry.attributes.position.array),
+          });
+          const mat = o.material as T.MeshStandardMaterial;
+          mat.roughness = 0.32;
+          mat.envMapIntensity = 1.2;
+        }
+      });
+      this.notice?.done();
+    } catch {
+      this.notice?.fail();
+    }
   }
   sound(freq: number, duration = 0.15) {
     try {
@@ -309,6 +373,21 @@ export class FishingScene {
         Math.sin(this.time * 8) * 0.2,
       );
     }
+    for (const { mesh, base } of this.fishVertices) {
+      const p = mesh.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const z = base[i * 3 + 2];
+        p.setX(
+          i,
+          base[i * 3] +
+            Math.sin(z * 12 + this.time * 9) *
+              0.018 *
+              Math.pow(Math.abs(z) / 0.33, 1.7),
+        );
+      }
+      p.needsUpdate = true;
+    }
+    this.water.geometry.computeVertexNormals();
     this.emit += dt;
     if (this.emit > 0.1) {
       this.emit = 0;
@@ -318,6 +397,9 @@ export class FishingScene {
     this.frame = requestAnimationFrame((v) => this.tick(v));
   }
   dispose() {
+    this.disposed = true;
+    this.releaseLook();
+    this.notice?.dispose();
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     this.scene.traverse((o) => {

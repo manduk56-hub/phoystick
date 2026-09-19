@@ -7,7 +7,17 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        {children}
+        <a
+          className="asset-credits"
+          href="/credits"
+          target="_blank"
+          rel="noreferrer"
+        >
+          3D 에셋 크레딧
+        </a>
+      </body>
     </html>
   );
 }

@@ -1,4 +1,12 @@
 import * as T from 'three';
+import {
+  gameModel,
+  fitModel,
+  disposeModel,
+  cinematicLight,
+  scannedMaterial,
+  assetNotice,
+} from './graphics-assets.ts';
 import { rounded, finish, organic } from './surface.ts';
 import { RELOAD_SECONDS, reloadPose } from './reload-motion.ts';
 export type HUD = {
@@ -21,6 +29,9 @@ type Enemy = {
   hp: number;
   speed: number;
   phase: number;
+  mixer?: T.AnimationMixer;
+  headBone?: T.Object3D;
+  gait?: T.Object3D[];
 };
 export class Game {
   canvas: HTMLCanvasElement;
@@ -61,6 +72,8 @@ export class Game {
   elapsed = 0;
   emitTime = 0;
   headshots = 0;
+  releaseLook: () => void = () => {};
+  modelNotice?: ReturnType<typeof assetNotice>;
   casings: { mesh: T.Mesh; velocity: T.Vector3; life: number }[] = [];
   onShot: (hit: boolean) => void = () => {};
   constructor(canvas: HTMLCanvasElement, notify: (h: HUD) => void) {
@@ -73,13 +86,31 @@ export class Game {
     });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
     this.renderer.setClearColor(0x080f13, 0);
-    this.renderer.shadowMap.enabled = true;
+    this.releaseLook = cinematicLight(this.renderer, this.scene, 1.05);
+    this.modelNotice = assetNotice(canvas, '몬스터 모델');
+    gameModel('yeti')
+      .then((m) => {
+        disposeModel(m.scene);
+        this.modelNotice?.done();
+      })
+      .catch(() => this.modelNotice?.fail());
     this.scene.fog = new T.FogExp2(0x102129, 0.012);
     this.camera.position.set(0, 1.7, 7);
     this.camera.lookAt(0, 1.5, -20);
     this.scene.add(new T.HemisphereLight(0xa5d9e8, 0x19212a, 2));
     const key = new T.DirectionalLight(0xc3e4dd, 3);
     key.position.set(-4, 9, 4);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, {
+      left: -15,
+      right: 15,
+      top: 15,
+      bottom: -15,
+      near: 0.5,
+      far: 65,
+    });
+    key.shadow.bias = -0.0003;
     this.scene.add(key);
     const rim = new T.DirectionalLight(0xffe0a3, 2.4);
     rim.position.set(2, 5, -25);
@@ -89,19 +120,16 @@ export class Game {
     this.scene.add(orange);
     const floor = new T.Mesh(
       new T.PlaneGeometry(100, 140),
-      new T.MeshStandardMaterial({
-        color: 0x19252a,
-        roughness: 0.75,
-        transparent: true,
-        opacity: 0.87,
-      }),
+      scannedMaterial('concrete_floor_02', 18),
     );
+    floor.receiveShadow = true;
     floor.rotation.x = -Math.PI / 2;
     floor.position.z = -30;
     this.scene.add(floor);
     const grid = new T.GridHelper(100, 40, 0x567367, 0x273b3f);
     grid.position.y = 0.015;
     grid.position.z = -25;
+    grid.visible = false;
     this.scene.add(grid);
     for (let side of [-1, 1])
       for (let z = 0; z > -65; z -= 10) {
@@ -116,6 +144,38 @@ export class Game {
     this.slide = this.box(0.17, 0.14, 0.55, 0x596269);
     this.slide.position.set(0, 0.09, -0.12);
     this.gun.add(this.slide);
+    for (const side of [-1, 1])
+      for (let i = 0; i < 7; i++) {
+        const groove = this.box(0.006, 0.105, 0.007, 0x222b30);
+        groove.position.set(side * 0.086, 0, 0.08 - i * 0.019);
+        this.slide.add(groove);
+      }
+    const port = this.box(0.067, 0.008, 0.105, 0x101619);
+    port.position.set(0.04, 0.073, -0.015);
+    this.slide.add(port);
+    const barrel = new T.Mesh(
+      new T.CylinderGeometry(0.032, 0.032, 0.45, 32, 1, true),
+      new T.MeshStandardMaterial({
+        color: 0x303840,
+        metalness: 0.9,
+        roughness: 0.25,
+        side: T.DoubleSide,
+      }),
+    );
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.066, -0.19);
+    this.gun.add(barrel);
+    const guard = new T.Mesh(
+      new T.TorusGeometry(0.072, 0.012, 12, 32, Math.PI * 1.7),
+      finish(0x273039),
+    );
+    guard.rotation.y = Math.PI / 2;
+    guard.position.set(0, -0.075, -0.07);
+    this.gun.add(guard);
+    const trigger = this.box(0.025, 0.08, 0.018, 0x899196);
+    trigger.rotation.x = 0.3;
+    trigger.position.set(0, -0.055, -0.046);
+    this.gun.add(trigger);
     const frame = this.box(0.16, 0.09, 0.5, 0x272e31);
     frame.position.z = -0.08;
     this.gun.add(frame);
@@ -298,7 +358,13 @@ export class Game {
       );
       if (e) {
         hit = true;
-        const head = hits[0].object === e.head || hits[0].object.userData?.head === true;
+        const head =
+          hits[0].object === e.head ||
+          hits[0].object.userData?.head === true ||
+          (!!e.headBone &&
+            hits[0].point.distanceTo(
+              e.headBone.getWorldPosition(new T.Vector3()),
+            ) < 0.43);
         e.hp -= head ? 3 : 1;
         this.hud.hit = head ? 'HEADSHOT +150' : 'HIT';
         if (e.hp <= 0) {
@@ -360,16 +426,54 @@ export class Game {
     }
     group.position.set((Math.random() - 0.5) * 11, 0, -35 - Math.random() * 9);
     this.scene.add(group);
-    this.enemies.push({
+    const enemy: Enemy = {
       group,
       head,
       parts,
       hp: 2 + Math.floor((this.hud.wave - 1) / 3),
       speed: 1.25 + this.hud.wave * 0.23 + Math.random() * 0.5,
       phase: Math.random() * 7,
-    });
+    };
+    this.enemies.push(enemy);
+    void this.upgradeEnemy(enemy);
+  }
+  async upgradeEnemy(e: Enemy) {
+    try {
+      const asset = await gameModel('yeti');
+      if (this.disposed || !this.enemies.includes(e)) {
+        disposeModel(asset.scene);
+        return;
+      }
+      e.group.children.slice().forEach((child) => {
+        e.group.remove(child);
+        disposeModel(child);
+      });
+      const model = fitModel(asset.scene, 2.6);
+      e.group.add(model);
+      e.parts = [];
+      asset.scene.traverse((o) => {
+        if (o instanceof T.Mesh) {
+          e.parts.push(o);
+          const mat = o.material as T.MeshStandardMaterial;
+          mat.envMapIntensity = 0.7;
+        }
+      });
+      e.headBone = asset.scene.getObjectByName('Yeti_Head');
+      e.gait = ['Yeti_LeftLeg', 'Yeti_RightLeg']
+        .map((n) => asset.scene.getObjectByName(n))
+        .filter(Boolean) as T.Object3D[];
+      e.mixer = new T.AnimationMixer(asset.scene);
+      for (const clip of asset.animations) e.mixer.clipAction(clip).play();
+      e.mixer.setTime(e.phase);
+    } catch {
+      /* Keep the working fallback if an asset cannot be loaded. */
+    }
   }
   remove(e: Enemy) {
+    e.mixer?.stopAllAction();
+    e.group.traverse((o) => {
+      if (o instanceof T.SkinnedMesh) o.skeleton.dispose();
+    });
     this.scene.remove(e.group);
     e.group.traverse((o) => {
       if (o instanceof T.Mesh || o instanceof T.LineSegments) {
@@ -418,8 +522,15 @@ export class Game {
         e.group.position.z += e.speed * dt;
         e.group.rotation.z = Math.sin(t * 0.003 + e.phase) * 0.04;
         e.group.position.y = Math.abs(Math.sin(t * 0.004 + e.phase)) * 0.045;
-        e.parts[4].rotation.x = Math.sin(t * 0.005 + e.phase) * 0.25;
-        e.parts[5].rotation.x = -Math.sin(t * 0.005 + e.phase) * 0.25;
+        if (e.mixer) {
+          e.mixer.update(dt);
+          e.gait?.forEach((bone, i) =>
+            bone.rotateZ(Math.sin(t * 0.005 + e.phase + i * Math.PI) * 0.22),
+          );
+        } else {
+          e.parts[4].rotation.x = Math.sin(t * 0.005 + e.phase) * 0.25;
+          e.parts[5].rotation.x = -Math.sin(t * 0.005 + e.phase) * 0.25;
+        }
         if (e.group.position.z > 4) {
           this.hud.health = Math.max(0, this.hud.health - 20);
           this.damage = 0.4;
@@ -506,6 +617,8 @@ export class Game {
         else o.material.dispose();
       }
     });
+    this.releaseLook();
+    this.modelNotice?.dispose();
     this.renderer.dispose();
     void this.audio?.close();
   }
