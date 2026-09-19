@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { Cockpit } from './racing-cockpit.ts';
 import { rounded, finish, organic } from './surface.ts';
 import {
   RacingModel,
@@ -45,7 +46,9 @@ function car(color: number) {
   );
   canopy.position.set(0, 0.95, 0.08);
   group.add(canopy);
-  const roof=new T.Mesh(organic(1.3,.16,1.4),finish(color));roof.position.set(0,1.4,.1);group.add(roof);
+  const roof = new T.Mesh(organic(1.3, 0.16, 1.4), finish(color));
+  roof.position.set(0, 1.4, 0.1);
+  group.add(roof);
   box(1.75, 0.12, 0.3, 0x10151f, 0, 1.08, 1.6);
   for (const x of [-0.87, 0.87])
     for (const z of [-1.12, 1.12]) {
@@ -84,7 +87,7 @@ export class RacingScene {
   scene = new T.Scene();
   camera = new T.PerspectiveCamera(62, 1, 0.1, 650);
   renderer: T.WebGLRenderer;
-  player = car(0x3fceff);
+  cockpit: Cockpit;
   traffic: T.Group[] = [];
   strips: { mesh: T.Mesh; left: number; right: number; height: number }[] = [];
   scenery: T.Group[] = [];
@@ -100,6 +103,10 @@ export class RacingScene {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
     this.renderer.setClearColor(0xc99591);
+    this.cockpit = new Cockpit();
+    this.camera.add(this.cockpit);
+    this.scene.add(this.camera);
+    this.camera.position.set(-0.3, 1.35, 0.25);
     this.scene.fog = new T.Fog(0xc99591, 100, 440);
     this.scene.add(new T.HemisphereLight(0xb5e0ff, 0xb36350, 2.7));
     const sun = new T.DirectionalLight(0xffe3ad, 3);
@@ -192,7 +199,6 @@ export class RacingScene {
       this.scene.add(m);
       return m;
     });
-    this.scene.add(this.player);
     for (let i = 0; i < 12; i++)
       for (let j = 0; j < 2; j++) {
         const q = new T.Mesh(
@@ -264,10 +270,6 @@ export class RacingScene {
       }
       pos.needsUpdate = true;
     }
-    this.player.position.set(s.lateral, 0, 0);
-    this.player.rotation.y = -roadSlope(s.distance) - s.input.steer * 0.16;
-    this.player.rotation.z = -s.input.steer * s.speed * 0.0008;
-    this.player.visible = s.hit <= 0 || Math.floor(now / 90) % 2 === 0;
     for (let i = 0; i < this.traffic.length; i++) {
       const c = this.model.traffic[i],
         m = this.traffic[i],
@@ -291,14 +293,14 @@ export class RacingScene {
       s.distance - TRACK_LENGTH,
     );
     this.finish.visible = TRACK_LENGTH - s.distance < 450;
-    const blend = 1 - Math.exp(-dt * 5);
-    this.camera.position.lerp(new T.Vector3(s.lateral * 0.64, 4.3, 10), blend);
+    this.camera.position.set(s.lateral - 0.3, 1.35, 0.25);
     this.camera.lookAt(
-      roadX(s.distance + 35) - origin + s.lateral * 0.25,
-      1,
+      s.lateral - 0.3 + roadSlope(s.distance) * 35 + s.input.steer * 1.1,
+      1.2,
       -35,
     );
-    this.camera.fov = 62 + s.speed * 0.13;
+    this.camera.fov = 68;
+    this.cockpit.update(s.speed, s.input.steer, this.camera.aspect);
     this.camera.updateProjectionMatrix();
     this.renderer.render(this.scene, this.camera);
     this.emit += dt;
@@ -320,5 +322,6 @@ export class RacingScene {
       }
     });
     this.renderer.dispose();
+    this.cockpit.texture.dispose();
   }
 }

@@ -775,3 +775,27 @@
     top: 16px;
   }
 }
+.race-active .race-dashboard {
+  top: 150px;
+  bottom: auto;
+  left: 4vw;
+  right: auto;
+  display: block;
+  width: 180px;
+  opacity: 0.85;
+}
+.race-active .race-speed {
+  display: none;
+}
+.race-active .race-wheel-mini {
+  display: none;
+}
+.race-active .race-pedals {
+  width: 180px;
+}
+.race-active .race-key-hint {
+  bottom: 12px;
+  padding: 6px 10px;
+  background: #0a1523aa;
+  border-radius: 4px;
+}
