@@ -298,7 +298,7 @@ export class Game {
       );
       if (e) {
         hit = true;
-        const head = hits[0].object === e.head;
+        const head = hits[0].object === e.head || hits[0].object.userData?.head === true;
         e.hp -= head ? 3 : 1;
         this.hud.hit = head ? 'HEADSHOT +150' : 'HIT';
         if (e.hp <= 0) {
@@ -329,6 +329,7 @@ export class Game {
         finish(c, c === 0xc4d796 ? 'skin' : 'fabric'),
       );
       m.position.set(x, y, z);
+      m.userData.head = y > 1.6;
       group.add(m);
       parts.push(m);
       return m;
