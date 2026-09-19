@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Home,
   Smartphone,
   Monitor,
   RotateCcw,
@@ -157,7 +158,7 @@ export default function Fishing() {
   return (
     <main className={'fish-app ' + (role === 'phone' ? 'fish-mobile' : '')}>
       <header className="fish-header">
-        <a href="/">← 좀비 슈팅</a>
+        <a href="/">← 메인화면</a>
         <b>STILLWATER</b>
         <a href="/racing">레이싱 ↗</a>
         <button
@@ -343,6 +344,15 @@ function FishingHost() {
           <span>마리 · {state.totalWeight.toFixed(2)} kg</span>
         </div>
         <div className="fish-top-actions">
+          <button
+            className="quiet"
+            onClick={() => {
+              window.location.assign('/');
+            }}
+            aria-label="메인화면으로 돌아가기"
+          >
+            <Home size={17} /> 메인화면
+          </button>
           <button
             className="quiet"
             onClick={() => {
