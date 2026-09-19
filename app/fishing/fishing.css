@@ -1,0 +1,704 @@
+.fish-app {
+  --fish-ink: #eaf4ed;
+  --fish-accent: #bceacb;
+  --fish-bg: #0a242b;
+  min-height: 100dvh;
+  background: var(--fish-bg);
+  color: var(--fish-ink);
+  font-family: Arial, 'Malgun Gothic', sans-serif;
+}
+.fish-app button {
+  background: #bceacb;
+  color: #10312c;
+  border-radius: 6px;
+}
+.fish-header {
+  padding: 22px 32px;
+  border-color: #c9efe123;
+  letter-spacing: 2px;
+}
+.fish-header a {
+  color: #b9d0cc;
+  text-decoration: none;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.fish-header b {
+  font-size: 22px;
+}
+.fish-header > span {
+  font-size: 13px;
+  color: #bed1c9;
+}
+.fish-scene {
+  position: relative;
+  min-height: calc(100dvh - 80px);
+  background: linear-gradient(
+    165deg,
+    #91b7b6,
+    #2c6772 38%,
+    #164b57 65%,
+    #0c2d37
+  );
+  overflow: hidden;
+}
+.fish-welcome {
+  position: absolute;
+  left: 7%;
+  top: 20%;
+  max-width: 650px;
+  text-shadow: 0 2px 16px #0c2939;
+}
+.fish-welcome > span {
+  font: 13px monospace;
+  letter-spacing: 3px;
+  color: #d0eadb;
+}
+.fish-welcome h1 {
+  font-size: clamp(38px, 4.7vw, 72px);
+  letter-spacing: -3px;
+  line-height: 1.25;
+}
+.fish-welcome p {
+  color: #d7e9e3;
+}
+.fish-welcome button {
+  margin-top: 18px;
+}
+.fish-app .quiet {
+  background: #153b42dd;
+  color: #d0e6df;
+  border-color: #bddbd044;
+}
+.fish-scene {
+  background: #326976 url('/assets/lake.png') center center/cover;
+  height: calc(100dvh - 80px);
+  min-height: 580px;
+}
+.fish-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.fish-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(#061c342c, transparent 40%, #041b3177);
+}
+.fish-top {
+  position: absolute;
+  top: 26px;
+  left: 32px;
+  right: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 25px;
+}
+.fish-top > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.fish-top > div:first-child span {
+  font: 12px monospace;
+  letter-spacing: 2px;
+  color: #e4eee4;
+}
+.fish-top > div:first-child b {
+  font-size: 20px;
+  text-shadow: 0 2px 8px #10383e;
+}
+.catch-count {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  background: #12383e99;
+  padding: 12px 18px;
+  border: 1px solid #d4edda33;
+  border-radius: 30px;
+  font-size: 14px;
+}
+.catch-count b {
+  font-size: 22px;
+}
+.fish-top-actions {
+  display: flex;
+  gap: 8px;
+}
+.fish-top-actions .quiet {
+  padding: 10px;
+}
+.fish-welcome {
+  top: 24%;
+  left: 6%;
+  z-index: 2;
+}
+.fish-welcome > button {
+  margin-right: 10px;
+}
+.fish-link-panel {
+  position: absolute;
+  top: 115px;
+  right: 32px;
+  width: 300px;
+  padding: 23px;
+  background: #102f36ed;
+  backdrop-filter: blur(18px);
+  border: 1px solid #b6dcbe44;
+  z-index: 8;
+  border-radius: 12px;
+  box-shadow: 0 15px 55px #051a3433;
+}
+.fish-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 12px monospace;
+  letter-spacing: 2px;
+  color: #b5dac8;
+}
+.fish-panel-title button {
+  margin-left: auto;
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 8px;
+}
+.fish-link-panel h2 {
+  font-size: 24px;
+  letter-spacing: -1px;
+  line-height: 1.4;
+  margin: 18px 0;
+}
+.fish-link-panel ol {
+  padding-left: 18px;
+  font-size: 14px;
+  color: #b7d2d0;
+  line-height: 2;
+}
+.fish-link-panel small {
+  font-size: 12px;
+  color: #bed3cb;
+}
+.fish-link-panel > a {
+  display: block;
+  color: #d4e8d4;
+  font-size: 13px;
+  margin-top: 16px;
+  text-decoration: none;
+}
+.fish-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.fish-code strong {
+  font: 25px monospace;
+  color: #d8f4c5;
+  white-space: nowrap;
+}
+.fish-code img {
+  width: 86px;
+  height: 86px;
+  border-radius: 5px;
+}
+.fish-status {
+  font-size: 13px;
+  color: #b6dec9;
+  margin: 10px 0;
+}
+.fish-phase {
+  position: absolute;
+  top: 115px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  max-width: 620px;
+  width: 80%;
+  text-shadow: 0 2px 15px #051e29;
+  pointer-events: none;
+}
+.fish-phase > span {
+  font-size: 12px;
+  letter-spacing: 4px;
+  color: #d8ead4;
+}
+.fish-phase h2 {
+  font-size: 30px;
+  letter-spacing: -1px;
+  margin: 12px 0;
+}
+.fish-phase p {
+  font-size: 15px;
+  color: #e1ede0;
+  margin: 8px 0;
+}
+.fish-phase button {
+  pointer-events: auto;
+  margin-top: 15px;
+}
+.bite h2 {
+  color: #ffdd86;
+}
+.fish-phase.bite {
+  animation: fish-bite 0.6s infinite alternate;
+}
+.fish-bottom {
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  bottom: 30px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+.fish-distance {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 170px;
+}
+.fish-distance > span {
+  font-size: 13px;
+  color: #c9dfdc;
+}
+.fish-distance > b {
+  font: 54px monospace;
+  line-height: 1;
+}
+.fish-distance small {
+  font-size: 20px;
+}
+.fish-meter {
+  width: min(320px, 100%);
+  background: #0c303adb;
+  padding: 15px 18px;
+  border: 1px solid #a6d2c333;
+  border-radius: 10px;
+}
+.fish-meter > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.fish-meter [data-slot='progress-track'] {
+  height: 8px;
+  background: #405c60;
+}
+.fish-meter [data-slot='progress-indicator'] {
+  background: #bceacb;
+}
+.fish-meter.danger [data-slot='progress-indicator'] {
+  background: #ffa077;
+}
+.fish-meter small {
+  display: block;
+  font-size: 12px;
+  color: #c0d5cd;
+  margin-top: 9px;
+  line-height: 1.4;
+}
+.fish-pc-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 9px;
+}
+.fish-pc-controls small {
+  font-size: 12px;
+  color: #c8dfdb;
+}
+.fishing-active {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  min-height: 0;
+  z-index: 100;
+}
+.fish-scene:fullscreen {
+  height: 100dvh;
+  min-height: 0;
+}
+.fish-error {
+  position: absolute;
+  bottom: 115px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #492f25ed;
+  border: 1px solid #e8ad73;
+  padding: 15px;
+  max-width: 90%;
+  font-size: 14px;
+  z-index: 12;
+}
+.fish-error button {
+  margin-left: 12px;
+  padding: 8px;
+}
+.fish-controller {
+  max-width: 480px;
+  margin: auto;
+  padding: 22px 22px 35px;
+}
+.fish-controller-title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.fish-controller-title > span {
+  font: 12px monospace;
+  letter-spacing: 2px;
+  color: #a5c8c3;
+}
+.fish-controller-title small {
+  font-size: 13px;
+  color: #d3e6d6;
+}
+.fish-join {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 20px;
+  padding: 5vh 0;
+}
+.fish-join > svg {
+  color: #bae4cd;
+}
+.fish-join h1 {
+  font-size: 30px;
+  letter-spacing: -2px;
+  margin: 0;
+}
+.fish-join p {
+  font-size: 14px;
+  margin: 0;
+}
+.fish-join > button {
+  width: 100%;
+  margin-top: 15px;
+}
+.fish-phone-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #183d43;
+  padding: 13px 16px;
+  border: 1px solid #a9d7c333;
+  border-radius: 9px;
+  font-size: 14px;
+}
+.fish-phone-summary b {
+  font: 27px monospace;
+}
+.fish-phone-phase {
+  text-align: center;
+  margin: 24px 0 18px;
+  min-height: 76px;
+}
+.fish-phone-phase > span {
+  font-size: 13px;
+  color: #a5c8c1;
+}
+.fish-phone-phase h2 {
+  font-size: 22px;
+  line-height: 1.5;
+  letter-spacing: -0.8px;
+  margin: 8px 0;
+}
+.fish-enable {
+  width: 100%;
+  padding: 13px;
+}
+.cast-steps {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+.cast-steps > span {
+  font-size: 13px;
+  color: #8eaead;
+  padding: 8px 10px;
+  background: #15373e;
+  border-radius: 5px;
+}
+.cast-steps > .lit {
+  background: #bceacb;
+  color: #153d39;
+}
+.fish-controller .fish-meter {
+  width: 100%;
+  margin-top: 16px;
+}
+.reel-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 24px 0 18px;
+}
+.reel-area p {
+  font-size: 13px;
+  color: #a7cbc5;
+  margin: 10px 0;
+}
+.fish-app .reel-wheel {
+  position: relative;
+  display: block;
+  width: 230px;
+  height: 230px;
+  padding: 0;
+  border-radius: 50%;
+  border: 12px solid #4d797a;
+  outline: 2px solid #91b2a750;
+  background: radial-gradient(
+    circle,
+    #234e55 0 30%,
+    #14343e 31% 63%,
+    #284e54 64%
+  );
+  box-shadow:
+    inset 0 2px 15px #0008,
+    0 12px 25px #03151c88;
+  touch-action: none;
+  user-select: none;
+  overflow: visible;
+  cursor: grab;
+}
+.reel-wheel:active {
+  transform: none;
+  cursor: grabbing;
+}
+.reel-wheel:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+.reel-spokes {
+  position: absolute;
+  inset: 15%;
+  border: 2px solid #709c9355;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 42deg,
+    #5d8585 43deg 49deg,
+    transparent 50deg 162deg,
+    #5d8585 163deg 169deg,
+    transparent 170deg 282deg,
+    #5d8585 283deg 289deg,
+    transparent 290deg
+  );
+}
+.reel-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 5px;
+  color: #d1e7d3;
+}
+.reel-hub > b {
+  font: 12px monospace;
+  letter-spacing: 2px;
+}
+.reel-knob {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.reel-knob:after {
+  content: '';
+  position: absolute;
+  right: 14%;
+  top: 14%;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: #d3bc85;
+  border: 3px solid #ead4a5;
+  box-shadow: 0 3px 8px #0008;
+}
+.fish-phone-buttons {
+  display: flex;
+  gap: 10px;
+}
+.fish-phone-buttons > button {
+  flex: 1;
+  padding: 14px 8px;
+  font-size: 14px;
+}
+.fish-phone-tools {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+  gap: 8px;
+}
+.fish-phone-tools > button {
+  font-size: 13px;
+  padding: 10px;
+}
+.fish-phone-note {
+  font-size: 12px;
+  color: #9dbcb9;
+  line-height: 1.8;
+  text-align: center;
+  margin-top: 18px;
+}
+.fish-mobile .fish-header {
+  padding: 17px 18px;
+  gap: 10px;
+  letter-spacing: 1px;
+}
+.fish-mobile .fish-header b {
+  font-size: 17px;
+}
+.fish-mobile .fish-header a {
+  font-size: 12px;
+}
+.fish-mobile .fish-header button {
+  font-size: 12px;
+  padding: 8px;
+}
+.fish-app button:focus-visible {
+  outline: 2px solid #e0f4ce;
+  outline-offset: 5px;
+}
+@keyframes fish-bite {
+  from {
+    transform: translateX(-50%) scale(1);
+  }
+  to {
+    transform: translateX(-50%) scale(1.025);
+  }
+}
+@media (max-width: 1000px) {
+  .fish-welcome {
+    max-width: 52%;
+  }
+  .fish-welcome h1 {
+    font-size: 43px;
+  }
+  .fish-link-panel {
+    width: 270px;
+    right: 20px;
+  }
+  .fish-top {
+    left: 20px;
+    right: 20px;
+  }
+  .catch-count {
+    display: none;
+  }
+  .fish-phase {
+    top: 105px;
+  }
+  .fish-bottom {
+    left: 20px;
+    right: 20px;
+    gap: 12px;
+  }
+  .fish-distance {
+    min-width: 100px;
+  }
+  .fish-distance > b {
+    font-size: 40px;
+  }
+  .fish-meter {
+    max-width: 290px;
+  }
+  .fish-pc-controls small {
+    max-width: 140px;
+    line-height: 1.5;
+  }
+}
+@media (max-width: 620px) {
+  .fish-header {
+    padding: 15px;
+  }
+  .fish-header b {
+    font-size: 18px;
+  }
+  .fish-header a {
+    font-size: 12px;
+  }
+  .fish-header button {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .fish-welcome {
+    top: 22%;
+    max-width: 90%;
+    left: 7%;
+  }
+  .fish-welcome h1 {
+    font-size: 38px;
+  }
+  .fish-welcome p {
+    font-size: 14px;
+  }
+  .fish-link-panel {
+    top: 90px;
+    left: 5%;
+    right: 5%;
+    width: 90%;
+    max-width: 360px;
+  }
+  .fish-phase {
+    top: 90px;
+    width: 90%;
+  }
+  .fish-phase h2 {
+    font-size: 24px;
+  }
+  .fish-phase p {
+    font-size: 13px;
+  }
+  .fish-bottom {
+    flex-wrap: wrap;
+    bottom: 20px;
+  }
+  .fish-distance {
+    flex: 1;
+  }
+  .fish-bottom .fish-meter {
+    order: 3;
+    width: 100%;
+    max-width: none;
+  }
+  .fish-top > div:first-child b {
+    font-size: 16px;
+  }
+  .fish-top-actions button {
+    padding: 8px;
+  }
+  .fish-top-actions button:first-child {
+    font-size: 12px;
+  }
+  .fish-scene {
+    min-height: 660px;
+  }
+  .fishing-active,
+  .fish-scene:fullscreen {
+    min-height: 0;
+  }
+  .fish-controller {
+    padding: 18px;
+  }
+  .reel-area {
+    margin: 20px 0 12px;
+  }
+  .fish-app .reel-wheel {
+    width: 210px;
+    height: 210px;
+  }
+}

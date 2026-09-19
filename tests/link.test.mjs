@@ -48,3 +48,10 @@ assert.equal(
 console.log(
   'PASS: create, pair, duplicate protection, token authorization, role permissions, signaling, control relay and HUD sync',
 );
+const fishHost=await call('create',{game:'fishing'});
+assert.equal((await call('join',{code:fishHost.data.code})).status,400);
+const fishPhone=await call('join',{code:fishHost.data.code,game:'fishing'});
+assert.equal(fishPhone.status,200);
+await call('input',{...fishPhone.data,data:{x:.5,y:.5,events:[{id:1,action:'cast',value:.75}],time:Date.now()}});
+assert.equal(JSON.parse((await call('read',fishHost.data)).data.input).events[0].value,.75);
+console.log('PASS: fishing pairing, cross-game rejection and casting relay');

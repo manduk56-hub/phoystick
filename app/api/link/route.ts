@@ -23,9 +23,16 @@ export async function POST(req: Request) {
           token = crypto.randomUUID();
         const r = await db
           .prepare(
-            'INSERT OR IGNORE INTO rooms(code,host,expires) VALUES(?,?,?)',
+            'INSERT OR IGNORE INTO rooms(code,host,expires,status) VALUES(?,?,?,?)',
           )
-          .bind(code, token, Date.now() + 7200000)
+          .bind(
+            code,
+            token,
+            Date.now() + 7200000,
+            JSON.stringify({
+              game: b.game === 'fishing' ? 'fishing' : 'shooting',
+            }),
+          )
           .run();
         if (r.meta.changes) return json({ code, token });
       }
@@ -39,6 +46,19 @@ export async function POST(req: Request) {
       .first<any>();
     if (!room) return json({ error: '코드가 없거나 만료되었습니다.' }, 404);
     if (b.action === 'join') {
+      const roomGame = room.status
+        ? JSON.parse(room.status).game || 'shooting'
+        : 'shooting';
+      if ((b.game || 'shooting') !== roomGame)
+        return json(
+          {
+            error:
+              roomGame === 'fishing'
+                ? '낚시게임의 코드입니다. 낚시 컨트롤러에서 연결해 주세요.'
+                : '좀비 슈팅의 코드입니다. 슈팅 컨트롤러에서 연결해 주세요.',
+          },
+          400,
+        );
       if (room.phone)
         return json(
           { error: '이미 연결된 폰이 있습니다. PC에서 새 코드를 만드세요.' },
