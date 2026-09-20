@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { BARRIERS, ROUTE_LENGTH, SECTORS, canStand, sectorAt } from './campaign.ts';
 import {
   gameModel,
   fitModel,
@@ -19,6 +20,10 @@ export type HUD = {
   wave: number;
   state: string;
   hit: string;
+  distance?: number;
+  objective?: string;
+  extraction?: number;
+  autoMove?: boolean;
   reloadMotion?: number;
   reloadProgress?: number;
 };
@@ -29,6 +34,7 @@ type Enemy = {
   hp: number;
   speed: number;
   phase: number;
+  attack?: number;
   mixer?: T.AnimationMixer;
   headBone?: T.Object3D;
   gait?: T.Object3D[];
@@ -56,8 +62,6 @@ export class Game {
   frame = 0;
   last = 0;
   spawn = 0;
-  remaining = 0;
-  waveWait = 0;
   flash = 0;
   damage = 0;
   slide: T.Mesh;
@@ -72,6 +76,10 @@ export class Game {
   elapsed = 0;
   emitTime = 0;
   headshots = 0;
+  keys = new Set<string>();
+  checkpoints = new Set<number>();
+  cover: T.Mesh[] = [];
+  extraction = 0;
   releaseLook: () => void = () => {};
   modelNotice?: ReturnType<typeof assetNotice>;
   casings: { mesh: T.Mesh; velocity: T.Vector3; life: number }[] = [];
@@ -85,7 +93,7 @@ export class Game {
       alpha: true,
     });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
-    this.renderer.setClearColor(0x080f13, 0);
+    this.renderer.setClearColor(0x102129, 1);
     this.releaseLook = cinematicLight(this.renderer, this.scene, 1.05);
     this.modelNotice = assetNotice(canvas, '몬스터 모델');
     gameModel('yeti')
@@ -119,20 +127,20 @@ export class Game {
     orange.position.set(6, 3, -9);
     this.scene.add(orange);
     const floor = new T.Mesh(
-      new T.PlaneGeometry(100, 140),
+      new T.PlaneGeometry(100, 320),
       scannedMaterial('concrete_floor_02', 18),
     );
     floor.receiveShadow = true;
     floor.rotation.x = -Math.PI / 2;
-    floor.position.z = -30;
+    floor.position.z = -120;
     this.scene.add(floor);
     const grid = new T.GridHelper(100, 40, 0x567367, 0x273b3f);
     grid.position.y = 0.015;
     grid.position.z = -25;
     grid.visible = false;
     this.scene.add(grid);
-    for (let side of [-1, 1])
-      for (let z = 0; z > -65; z -= 10) {
+    for (const side of [-1, 1])
+      for (let z = 10; z > -260; z -= 10) {
         const pillar = this.box(0.5, 6, 0.6, 0x26383e);
         pillar.position.set(side * 8, 3, z);
         this.scene.add(pillar);
@@ -141,6 +149,7 @@ export class Game {
         lamp.position.set(side * 7.7, 3.5, z + 0.4);
         this.scene.add(lamp);
       }
+    this.buildRoute();
     this.slide = this.box(0.17, 0.14, 0.55, 0x596269);
     this.slide.position.set(0, 0.09, -0.12);
     this.gun.add(this.slide);
@@ -222,6 +231,71 @@ export class Game {
   box(w: number, h: number, d: number, c: number) {
     return new T.Mesh(rounded(w, h, d), finish(c, 'metal'));
   }
+  buildRoute() {
+    const place = (w: number, h: number, d: number, color: number, x: number, z: number, y = h / 2) => {
+      const mesh = new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshStandardMaterial({color, roughness:0.92, metalness:0.05}));
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.scene.add(mesh);
+      return mesh;
+    };
+    for (let z = 4; z > -245; z -= 12) {
+      const sector = sectorAt(7 - z);
+      for (const side of [-1, 1]) {
+        place(2, 0.3, 12, 0x454d4d, side * 8, z);
+        place(8, sector === 2 ? 7 : 9 + (Math.abs(z) % 3), 10, [0x354951, 0x4b4540, 0x27353a, 0x344c49][sector], side * 13, z);
+        if (sector !== 2) for (let row = 0; row < 2; row++) {
+          const window = place(0.05, 1.2, 2, 0x8c9e8a, side * 8.96, z, 3 + row * 2.5);
+          (window.material as T.MeshStandardMaterial).emissive.setHex(0x31452f);
+        }
+      }
+      place(0.15, 0.02, 4, 0xbcb084, 0, z, 0.025);
+      if (sector === 2) place(19, 0.5, 12, 0x26353a, 0, z, 7);
+    }
+    for (const b of BARRIERS) this.cover.push(place(b.width, 1.1, b.depth, 0x806442, b.x, b.z));
+    for (const distance of [60, 120, 180, 240]) {
+      const z = 7 - distance;
+      for (const side of [-1, 1]) place(0.35, 4.5, 0.35, 0xa8c66c, side * 7, z);
+      place(14, 0.45, 0.4, 0xa8c66c, 0, z, 4.5);
+      place(13, 0.025, 3, distance === 240 ? 0x658d40 : 0x345c58, 0, z + 1.5, 0.03);
+    }
+  }
+  advanceCampaign(dt: number) {
+    if (this.hud.state !== 'playing') return;
+    let forward = (this.keys.has('KeyW') || this.keys.has('ArrowUp') ? 1 : 0) - (this.keys.has('KeyS') || this.keys.has('ArrowDown') ? 1 : 0);
+    const sideways = (this.keys.has('KeyD') || this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('KeyA') || this.keys.has('ArrowLeft') ? 1 : 0);
+    if (!forward && this.hud.autoMove) forward = 1;
+    const speed = (this.keys.has('ShiftLeft') ? 5 : 3.4) * dt / Math.max(1, Math.hypot(forward, sideways));
+    const p = this.camera.position;
+    const x = p.x + sideways * speed;
+    const z = Math.max(7 - ROUTE_LENGTH, Math.min(7, p.z - forward * speed));
+    if (canStand(x, p.z)) p.x = x;
+    if (canStand(p.x, z)) p.z = z;
+    const distance = Math.max(0, 7 - p.z);
+    this.hud.distance = distance;
+    const sector = sectorAt(distance);
+    this.hud.wave = sector + 1;
+    for (const checkpoint of [60, 120, 180]) {
+      if (distance >= checkpoint && !this.checkpoints.has(checkpoint)) {
+        this.checkpoints.add(checkpoint);
+        this.hud.health = Math.min(100, this.hud.health + 25);
+        this.hud.hit = '보급 지점 통과 · 체력 +25';
+      }
+    }
+    const atExit = distance >= ROUTE_LENGTH - 3;
+    const threatened = this.enemies.some(e => e.group.position.distanceTo(p) < 6);
+    this.extraction = atExit && !threatened ? Math.min(8, this.extraction + dt) : 0;
+    this.hud.extraction = this.extraction;
+    this.hud.objective = atExit ? (threatened ? '주변 좀비를 제거해 구조 구역 확보' : `구조 대기 · ${Math.ceil(8 - this.extraction)}초`) : `${SECTORS[sector]} · ${Math.ceil((sector + 1) * 60 - distance)}m 앞 ${sector === 3 ? '탈출' : '보급'} 지점`;
+    if (this.extraction >= 8) {
+      this.hud.state = 'won';
+      this.hud.score += 1000;
+      this.hud.autoMove = false;
+      this.keys.clear();
+      this.emit();
+    }
+  }
   emit() {
     this.notify({ ...this.hud });
   }
@@ -239,9 +313,15 @@ export class Game {
       state: 'playing',
       hit: '',
     };
-    this.remaining = 6;
+    this.camera.position.set(0, 1.7, 7);
+    this.keys.clear();
+    this.checkpoints.clear();
+    this.extraction = 0;
+    this.hud.distance = 0;
+    this.hud.extraction = 0;
+    this.hud.autoMove = false;
+    this.hud.objective = '격리 지구 · 60m 앞 보급 지점';
     this.spawn = 0.4;
-    this.waveWait = 0;
     this.elapsed = 0;
     this.emit();
     this.sound(300, 0.12, 'sine');
@@ -267,6 +347,11 @@ export class Game {
       return;
     }
     if (this.hud.state !== 'playing') return;
+    if (a === 'advance') {
+      this.hud.autoMove = !this.hud.autoMove;
+      this.emit();
+      return;
+    }
     if (a === 'fire') {
       this.fire(x, y);
       return;
@@ -351,6 +436,8 @@ export class Game {
       this.enemies.flatMap((e) => e.parts),
       false,
     );
+    const coverHit = this.ray.intersectObjects(this.cover || [], false)[0];
+    if (coverHit && hits[0] && coverHit.distance < hits[0].distance) hits.length = 0;
     let hit = false;
     if (hits[0]) {
       const e = this.enemies.find((v) =>
@@ -424,7 +511,8 @@ export class Game {
       material.metalness = 0;
       material.roughness = 0.9;
     }
-    group.position.set((Math.random() - 0.5) * 11, 0, -35 - Math.random() * 9);
+    group.position.set((Math.random() - 0.5) * 12, 0, Math.max(-248, this.camera.position.z - 20 - Math.random() * 14));
+    for (const b of BARRIERS) if (Math.abs(group.position.x - b.x) < 2 && Math.abs(group.position.z - b.z) < 2) group.position.x = 0;
     this.scene.add(group);
     const enemy: Enemy = {
       group,
@@ -512,14 +600,25 @@ export class Game {
     this.elapsed += dt;
     if (this.hud.state === 'playing') {
       this.advanceReload(dt);
+      this.advanceCampaign(dt);
       this.spawn -= dt;
-      if (this.remaining > 0 && this.spawn <= 0) {
+      if (this.hud.state === 'playing' && this.enemies.length < 12 && this.spawn <= 0) {
         this.spawnEnemy();
-        this.remaining--;
-        this.spawn = Math.max(0.55, 2.2 - this.hud.wave * 0.12);
+        this.spawn = Math.max(1.8, 3.7 - this.hud.wave * 0.35);
       }
-      for (const e of [...this.enemies]) {
-        e.group.position.z += e.speed * dt;
+      for (const e of this.enemies) {
+        if (this.hud.state !== 'playing') break;
+        const direction = this.camera.position.clone().sub(e.group.position);
+        direction.y = 0;
+        const distance = direction.length();
+        direction.normalize();
+        const step = Math.min(e.speed * dt, Math.max(0, distance - 1.1));
+        const nextX = e.group.position.x + direction.x * step;
+        const nextZ = e.group.position.z + direction.z * step;
+        const blocked = BARRIERS.some(b => Math.abs(nextX - b.x) < b.width / 2 + 0.35 && Math.abs(nextZ - b.z) < b.depth / 2 + 0.35);
+        if (blocked) e.group.position.x += (e.group.position.x > 0 ? -1 : 1) * e.speed * dt;
+        else { e.group.position.x = nextX; e.group.position.z = nextZ; }
+        e.group.rotation.y = Math.atan2(direction.x, direction.z);
         e.group.rotation.z = Math.sin(t * 0.003 + e.phase) * 0.04;
         e.group.position.y = Math.abs(Math.sin(t * 0.004 + e.phase)) * 0.045;
         if (e.mixer) {
@@ -531,29 +630,20 @@ export class Game {
           e.parts[4].rotation.x = Math.sin(t * 0.005 + e.phase) * 0.25;
           e.parts[5].rotation.x = -Math.sin(t * 0.005 + e.phase) * 0.25;
         }
-        if (e.group.position.z > 4) {
-          this.hud.health = Math.max(0, this.hud.health - 20);
+        e.attack = Math.max(0, (e.attack || 0) - dt);
+        if (distance < 1.6 && !e.attack) {
+          e.attack = 1.2;
+          this.hud.health = Math.max(0, this.hud.health - 10);
           this.damage = 0.4;
-          this.remove(e);
-          this.enemies = this.enemies.filter((v) => v !== e);
           this.sound(50, 0.25, 'sawtooth');
           if (!this.hud.health) this.hud.state = 'over';
           this.emit();
         }
       }
-      if (!this.remaining && !this.enemies.length) {
-        this.waveWait += dt;
-        if (this.waveWait > 2) {
-          this.hud.wave++;
-          this.remaining = 5 + this.hud.wave * 2;
-          this.waveWait = 0;
-          this.hud.health = Math.min(100, this.hud.health + 10);
-          this.hud.hit = '다음 웨이브 · 체력 +10';
-          this.emit();
-        }
-      }
+      this.emitTime += dt;
+      if (this.emitTime >= 0.1) { this.emitTime = 0; this.emit(); }
     }
-    for (const c of [...this.casings]) {
+    for (const c of this.casings) {
       c.life -= dt;
       c.velocity.y -= dt * 3;
       c.mesh.position.addScaledVector(c.velocity, dt);

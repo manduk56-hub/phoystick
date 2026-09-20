@@ -303,6 +303,12 @@ function Host() {
     };
     const key = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft'].includes(e.code)) {
+        e.preventDefault();
+        g.keys.add(e.code);
+      }
+      if (e.repeat) return;
+      if (e.code === 'KeyF') g.action('advance');
       if (e.code === 'KeyR') g.action('reload');
       if (e.code === 'Escape' || e.code === 'KeyP') g.pause();
       if (e.code === 'Space') {
@@ -311,6 +317,10 @@ function Host() {
       }
     };
     window.addEventListener('keydown', key);
+    const keyup = (e: KeyboardEvent) => g.keys.delete(e.code);
+    const blur = () => { g.keys.clear(); if (g.hud.state === 'playing') g.pause(); };
+    window.addEventListener('keyup', keyup);
+    window.addEventListener('blur', blur);
     const timer = setInterval(() => {
       link.current?.send({ ...hudRef.current, time: Date.now() });
       if (
@@ -354,6 +364,8 @@ function Host() {
       link.current?.close();
       clearInterval(timer);
       window.removeEventListener('keydown', key);
+      window.removeEventListener('keyup', keyup);
+      window.removeEventListener('blur', blur);
       lifecycle.abort();
     };
   }, []);
@@ -423,7 +435,7 @@ function Host() {
         <div>
           <span className="eyebrow">SURVIVAL / 격리 구역 07</span>
           <h1 className="game-title">
-            LAST LINE<span>마지막 방어선</span>
+            DEAD ROUTE<span>구조 지점으로</span>
           </h1>
         </div>
         <div className="live">
@@ -496,7 +508,7 @@ function Host() {
           <div className="vignette" />
           <div className="hud-top">
             <div>
-              <span className="eyebrow">WAVE</span>
+              <span className="eyebrow">구역 / 04</span>
               <strong>{String(hud.wave).padStart(2, '0')}</strong>
             </div>
             <div className="health">
@@ -512,31 +524,38 @@ function Host() {
               <strong>{String(hud.score).padStart(6, '0')}</strong>
             </div>
           </div>
+          <div className="campaign-hud">
+            <strong>{hud.objective || '격리 지구에서 구조 지점까지 이동하세요'}</strong>
+            <span>{Math.floor(hud.distance || 0)} / 240 m</span>
+            <progress aria-label="탈출 경로 진행률" value={hud.distance || 0} max={240} />
+            <small>WASD / 방향키 이동 · Shift 달리기 · F 자동 전진 · R 장전 3단계</small>
+            {hud.state === 'playing' && <button className="quiet" onClick={() => game.current?.action('advance')}>{hud.autoMove ? '■ 전진 멈추기' : '↑ 자동 전진'}</button>}
+          </div>
           <div ref={cross} className="crosshair">
             <Crosshair size={38} />
           </div>
           {hud.state !== 'playing' && !calibrating && (
             <div className="overlay">
               <span className="eyebrow">
-                {hud.state === 'over'
+                {hud.state === 'won' ? 'EXTRACTION COMPLETE' : hud.state === 'over'
                   ? 'SIGNAL LOST'
                   : hud.state === 'paused'
                     ? 'HOLD POSITION'
                     : 'THEY ARE GETTING CLOSER'}
               </span>
               <h2>
-                {hud.state === 'over'
-                  ? '방어선이 무너졌다.'
+                {hud.state === 'won' ? '탈출에 성공했다.' : hud.state === 'over'
+                  ? '구조 지점에 도달하지 못했다.'
                   : hud.state === 'paused'
                     ? '잠시 숨을 고르세요.'
-                    : '다가오기 전에, 쏴라.'}
+                    : '좀비를 뚫고, 탈출하라.'}
               </h2>
               <p>
-                {hud.state === 'over'
-                  ? `${hud.kills}마리 처치 · ${hud.wave} 웨이브 · ${hud.score}점`
+                {hud.state === 'won' || hud.state === 'over'
+                  ? `${Math.floor(hud.distance || 0)}m 이동 · ${hud.kills}마리 처치 · ${hud.score}점`
                   : hud.state === 'paused'
                     ? '준비되면 전투를 이어가세요.'
-                    : '폰으로 조준하거나 마우스로 바로 시작하세요.\n몬스터가 도착하면 체력이 20씩 줄어듭니다.'}
+                    : 'WASD로 이동하며 240m 앞 구조 지점으로 향하세요.\n폰에서는 자동 전진 버튼을 사용하세요. 보급 지점에서 체력을 회복합니다.'}
               </p>
               <button
                 disabled={
@@ -551,7 +570,7 @@ function Host() {
               >
                 {hud.state === 'paused'
                   ? '전투 계속'
-                  : hud.state === 'over'
+                  : hud.state === 'over' || hud.state === 'won'
                     ? '다시 도전'
                     : '전투 시작'}{' '}
                 <ArrowUpRight size={18} />
@@ -614,7 +633,7 @@ function Host() {
           </button>
           {expanded && (
             <div className="play-shortcuts">
-              클릭 / 폰 동작 : 발사 <span>R : 장전</span>
+              WASD : 이동 · 클릭 / 폰 동작 : 발사 <span>R : 장전</span>
               <span>ESC : 일시정지</span>
             </div>
           )}
@@ -729,7 +748,7 @@ function Host() {
       )}
       <div className="underbar">
         <span>
-          <Crosshair size={16} /> 마우스 이동 · 클릭 발사
+          <Crosshair size={16} /> WASD 이동 · 마우스 조준 · 클릭 발사
         </span>
         <button
           className="quiet"
@@ -750,7 +769,7 @@ function Host() {
       <div className="mission-note">
         <b>MISSION BRIEF</b>
         <span>
-          헤드샷은 더 강한 피해와 보너스 점수. 웨이브 완료 시 체력 +10.
+          4개 구역을 통과해 탈출하세요. 보급 지점에서 체력 +25. 구조 지점 주변을 확보하고 8초간 대기하세요.
         </span>
         <span>무한 예비 탄창 / 수동 3단계 장전</span>
       </div>
@@ -992,7 +1011,7 @@ function Controller() {
         <>
           <div className="phone-stats">
             <span>
-              WAVE <b>{hud.wave}</b>
+              구역 <b>{hud.wave} / 4</b>
             </span>
             <span>
               체력 <b>{hud.health}</b>
@@ -1118,7 +1137,7 @@ function Controller() {
                   className="quiet"
                   onClick={() =>
                     sendAction(
-                      hud.state === 'ready' || hud.state === 'over'
+                      hud.state === 'ready' || hud.state === 'over' || hud.state === 'won'
                         ? 'start'
                         : 'pause',
                     )
@@ -1131,6 +1150,9 @@ function Controller() {
                       : '전투 시작'}
                 </button>
               </div>
+              <button className="quiet" disabled={hud.state !== 'playing'} onClick={() => sendAction('advance')}>
+                {hud.autoMove ? '■ 전진 멈추기' : '↑ 자동 전진'} · {Math.floor(hud.distance || 0)} / 240m
+              </button>
               {sensor && (
                 <label className="sensitivity">
                   튕기기 감도
