@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+ulimit -c 0
+# Node sizes its default heap from physical RAM and does not count swap.
+export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=1536"
 
 sha=${1:?commit SHA required}
 bundle=${2:?Git bundle required}
