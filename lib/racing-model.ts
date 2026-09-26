@@ -272,7 +272,8 @@ export class RacingModel {
           brake * 30 -
           1.8 -
           s.speed * s.speed * 0.0015 -
-          (s.offroad ? 17 : 0)) *
+          // Grass slows a moving car, but cannot overpower acceleration at rest.
+          (s.offroad ? Math.min(17, s.speed * 0.9) : 0)) *
           dt,
       0,
       72,

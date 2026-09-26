@@ -144,6 +144,37 @@ test('closed circuit is continuous at the line and local forward direction is co
   assert.ok(Math.hypot(a.x - b.x, a.z - b.z) < 0.21);
   assert.ok(localTrack(10, 0).z < -9);
 });
+test('a stopped car can accelerate and steer back onto the circuit from either shoulder', () => {
+  for (const side of [-1, 1]) for (const throttle of [0.35, 1]) {
+    const m = new RacingModel();
+    m.state.phase = 'racing';
+    m.traffic = [];
+    m.state.lateral = side * 8;
+    m.state.speed = 0;
+    m.setInput({ throttle, brake: 0, steer: -side });
+    tick(m, 0.5);
+    assert.ok(m.state.speed > 0, 'accelerates from zero on grass');
+    tick(m, 3);
+    assert.ok(Math.abs(m.state.lateral) < 5.2, 'returns to the road');
+    assert.ok(m.state.distance > 0);
+    assert.equal(m.state.offroad, false);
+    assert.equal(m.state.lapValid, false, 'off-road lap remains invalid');
+  }
+});
+test('off-road recovery does not move an idle or braking car', () => {
+  const m = new RacingModel();
+  m.state.phase = 'racing';
+  m.traffic = [];
+  m.state.lateral = 8;
+  m.setInput({ throttle: 0, brake: 0, steer: -1 });
+  tick(m, 1);
+  assert.equal(m.state.speed, 0);
+  assert.equal(m.state.lateral, 8);
+  m.setInput({ throttle: 1, brake: 1, steer: -1 });
+  tick(m, 1);
+  assert.equal(m.state.speed, 0);
+  assert.equal(m.state.distance, 0);
+});
 test('lap timing interpolates line crossing, invalid laps are excluded, restart clears standings', () => {
   const m = new RacingModel();
   m.start();
