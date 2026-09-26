@@ -10,7 +10,6 @@ import {
   Monitor,
   ArrowUpRight,
   RotateCcw,
-  Volume2,
   Shield,
   Pause,
   ChevronRight,
@@ -208,16 +207,20 @@ export default function Home() {
   }, []);
   return (
     <main className={'shell ' + (role === 'phone' ? 'phone-shell' : '')}>
-      <header>
+      <header className="home-header">
         <a className="brand" href="/">
-          ◈ <b>DEAD SIGNAL</b>
+          <span className="brand-symbol" aria-hidden="true">
+            ◈
+          </span>
+          <b>PHOYSTICK</b>
         </a>
-        <a className="quiet" href="/fishing">
-          낚시 · STILLWATER ↗
-        </a>
-        <a className="quiet" href="/racing">
-          레이싱 · APEX DRIVE ↗
-        </a>
+        <nav className="game-nav" aria-label="게임 선택">
+          <a href="/" aria-current="page">
+            슈팅
+          </a>
+          <a href="/fishing">낚시</a>
+          <a href="/racing">레이싱</a>
+        </nav>
         <button
           className="quiet role-toggle"
           onClick={() => setRole(role === 'host' ? 'phone' : 'host')}
@@ -227,12 +230,6 @@ export default function Home() {
         </button>
       </header>
       {ready && (role === 'host' ? <Host /> : <Controller />)}
-      <footer>
-        <span>
-          DEAD SIGNAL <i>/</i> PROTOTYPE 01
-        </span>
-        <span>살아남는 건, 당신의 손에.</span>
-      </footer>
     </main>
   );
 }
@@ -459,10 +456,8 @@ function Host() {
     <>
       <div className="topline">
         <div>
-          <span className="eyebrow">SURVIVAL / 격리 구역 07</span>
-          <h1 className="game-title">
-            DEAD ROUTE<span>구조 지점으로</span>
-          </h1>
+          <span className="eyebrow">SURVIVAL SHOOTER</span>
+          <h1 className="game-title">DEAD SIGNAL</h1>
         </div>
         <div className="live">
           <span
@@ -474,7 +469,11 @@ function Host() {
       <div className="host-grid">
         <section
           ref={arena}
-          className={'arena' + (expanded ? ' play-expanded' : '')}
+          className={
+            'arena' +
+            (expanded ? ' play-expanded' : '') +
+            (hud.state === 'ready' ? ' is-ready' : '')
+          }
           onPointerMove={mouse}
           onPointerDown={(e) => {
             if (
@@ -603,7 +602,7 @@ function Host() {
                   ? `${Math.floor(hud.distance || 0)}m 이동 · ${hud.kills}마리 처치 · ${hud.score}점`
                   : hud.state === 'paused'
                     ? '준비되면 전투를 이어가세요.'
-                    : 'WASD로 이동하며 240m 앞 구조 지점으로 향하세요.\n폰에서는 자동 전진 버튼을 사용하세요. 보급 지점에서 체력을 회복합니다.'}
+                    : '구조 지점까지 살아남으세요.'}
               </p>
               <button
                 disabled={
@@ -732,19 +731,14 @@ function Host() {
         <aside className="console">
           <div className="section-label">
             <Smartphone size={19} />
-            <span>CONTROLLER LINK</span>
-            <span className="tiny-tag">01</span>
+            <span>폰 컨트롤러</span>
           </div>
           <h2>
-            당신의 폰이
+            손끝으로
             <br />
-            컨트롤러가 됩니다.
+            조준하세요.
           </h2>
-          <p>
-            같은 사이트를 폰으로 열고
-            <br />
-            아래 코드를 입력하세요.
-          </p>
+          <p>QR을 스캔하거나 폰에서 연결 코드를 입력하세요.</p>
           {room ? (
             <>
               <div className="pair-box">
@@ -778,27 +772,30 @@ function Host() {
             </button>
           )}
           <div className="divider" />
-          <div className="control-note">
-            <span>01</span>
-            <div>
-              <b>폰을 가로로 잡기</b>
-              <p>한쪽 끝을 총구처럼 모니터로 향하세요.</p>
+          <details className="controller-help">
+            <summary>폰 조작 방법</summary>
+            <div className="control-note">
+              <span>01</span>
+              <div>
+                <b>폰을 가로로 잡기</b>
+                <p>한쪽 끝을 총구처럼 모니터로 향하세요.</p>
+              </div>
             </div>
-          </div>
-          <div className="control-note">
-            <span>02</span>
-            <div>
-              <b>중앙과 모서리 보정</b>
-              <p>폰 화면의 안내에 따라 조준을 맞추세요.</p>
+            <div className="control-note">
+              <span>02</span>
+              <div>
+                <b>중앙과 모서리 보정</b>
+                <p>폰 화면의 안내에 따라 조준을 맞추세요.</p>
+              </div>
             </div>
-          </div>
-          <div className="control-note">
-            <span>03</span>
-            <div>
-              <b>짧게 튕겨 발사</b>
-              <p>총구를 위로 튕기거나 발사 버튼을 누르세요.</p>
+            <div className="control-note">
+              <span>03</span>
+              <div>
+                <b>짧게 튕겨 발사</b>
+                <p>총구를 위로 튕기거나 발사 버튼을 누르세요.</p>
+              </div>
             </div>
-          </div>
+          </details>
           <div className="mode-buttons">
             <button
               className={mode === 'mouse' ? 'selected' : ''}
@@ -836,17 +833,10 @@ function Host() {
         <span>
           <b>ESC</b> 일시정지
         </span>
-        <span className="sound-note">
-          <Volume2 size={15} /> 사운드 ON
-        </span>
       </div>
       <div className="mission-note">
-        <b>MISSION BRIEF</b>
-        <span>
-          4개 구역을 통과해 탈출하세요. 보급 지점에서 체력 +25. 구조 지점 주변을
-          확보하고 8초간 대기하세요.
-        </span>
-        <span>무한 예비 탄창 / 수동 3단계 장전</span>
+        <span>목표</span>
+        <b>생존하며 구조 지점에 도착하세요.</b>
       </div>
     </>
   );

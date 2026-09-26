@@ -17,14 +17,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <body>
         {children}
         <GameMenu />
-        <a
-          className="asset-credits"
-          href="/credits"
-          target="_blank"
-          rel="noreferrer"
-        >
-          3D 에셋 크레딧
-        </a>
+        <footer className="site-footer">
+          <span>PHOYSTICK</span>
+          <a href="/credits">크레딧</a>
+        </footer>
       </body>
     </html>
   );

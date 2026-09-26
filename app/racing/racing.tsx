@@ -153,14 +153,21 @@ export default function Racing() {
   }, []);
   return (
     <main className="race-app">
-      <nav className="race-nav">
-        <a href="/">DEAD SIGNAL</a>
-        <a href="/fishing">STILLWATER</a>
-        <b>APEX DRIVE</b>
+      <header className="race-nav">
+        <a className="lobby-brand" href="/">
+          ◈ PHOYSTICK
+        </a>
+        <nav className="game-nav" aria-label="게임 선택">
+          <a href="/">슈팅</a>
+          <a href="/fishing">낚시</a>
+          <a href="/racing" aria-current="page">
+            레이싱
+          </a>
+        </nav>
         <button onClick={() => setPhone(!phone)}>
           {phone ? '직접 플레이' : '폰 컨트롤러'} ↗
         </button>
-      </nav>
+      </header>
       {ready && (phone ? <Controller /> : <Host />)}
     </main>
   );
@@ -352,7 +359,7 @@ function Host() {
       <div className="race-vignette" />
       <header className="race-top">
         <div>
-          <span>GT SPRINT / ROUND 01</span>
+          <span>GT SPRINT</span>
           <b>
             APEX<span>DRIVE</span>
           </b>
@@ -406,19 +413,12 @@ function Host() {
       </header>
       {!active && (
         <div className="race-intro">
-          <span className="race-eyebrow">
-            RACE WEEKEND / APEX INTERNATIONAL
-          </span>
           <h1>
             그리드에서,
             <br />
             <em>포디움까지.</em>
           </h1>
-          <p>
-            8대의 GT 레이스카, 2.4km 폐쇄형 서킷.
-            <br />
-            3랩 동안 경쟁하고 가장 먼저 체커기를 받으세요.
-          </p>
+          <p>8대의 레이스카와 3랩 경쟁. 가장 먼저 체커기를 받으세요.</p>
           <div className="race-buttons">
             <button
               className="race-primary"
@@ -439,18 +439,12 @@ function Host() {
             </button>
             <button onClick={() => setSetup(true)}>폰 핸들 연결 ↗</button>
           </div>
-          <p>WASD / 방향키로 운전 · 자동 변속 · 조향 보조</p>
-          <div className="race-spec">
-            <span>
-              <b>3</b> LAPS
-            </span>
-            <span>
-              <b>8</b> DRIVERS
-            </span>
-            <span>
-              <b>GT</b> SPRINT
-            </span>
-          </div>
+          <p className="race-input-hint">
+            <kbd>WASD</kbd>
+            <span>또는</span>
+            <kbd>방향키</kbd>
+            <span>로 운전</span>
+          </p>
         </div>
       )}
       {active && (

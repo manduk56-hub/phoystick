@@ -188,9 +188,16 @@ export default function Fishing() {
   return (
     <main className={'fish-app ' + (role === 'phone' ? 'fish-mobile' : '')}>
       <header className="fish-header">
-        <a href="/">← 메인화면</a>
-        <b>STILLWATER</b>
-        <a href="/racing">레이싱 ↗</a>
+        <a className="lobby-brand" href="/">
+          ◈ PHOYSTICK
+        </a>
+        <nav className="game-nav" aria-label="게임 선택">
+          <a href="/">슈팅</a>
+          <a href="/fishing" aria-current="page">
+            낚시
+          </a>
+          <a href="/racing">레이싱</a>
+        </nav>
         <button
           className="quiet"
           onClick={() => setRole((v) => (v === 'host' ? 'phone' : 'host'))}
@@ -218,7 +225,7 @@ function FishingHost() {
     [busy, setBusy] = useState(false),
     [setup, setSetup] = useState(false),
     [notebook, setNotebook] = useState(false),
-    [active, setActive] = useState(true);
+    [active, setActive] = useState(false);
   useEffect(() => {
     let s: FishingScene;
     try {
@@ -424,7 +431,7 @@ function FishingHost() {
       />
       <div className="fish-top">
         <div>
-          <span>STILLWATER / LAKE 01</span>
+          <span>낚시 포인트</span>
           <b>{spots[state.spot].name}</b>
         </div>
         <div className="catch-count">
@@ -524,17 +531,13 @@ function FishingHost() {
       )}
       {state.phase === 'ready' && !active && (
         <div className="fish-welcome">
-          <span>MOTION FISHING / STILLWATER</span>
+          <span>STILLWATER</span>
           <h1>
             물결 너머,
             <br />
             당신의 첫 입질.
           </h1>
-          <p>
-            폰이 낚싯대가 됩니다.
-            <br />
-            뒤로 준비하고, 앞으로 던지고, 천천히 감으세요.
-          </p>
+          <p>던지고, 기다리고, 천천히 감으세요.</p>
           <button onClick={() => action('cast', 0.65)}>
             PC로 먼저 낚시하기 <ArrowUpRight size={18} />
           </button>

@@ -6,6 +6,50 @@
   min-height: 100dvh;
   font-family: Arial, 'Malgun Gothic', sans-serif;
 }
+.race-stage:not(.race-active) .race-vignette {
+  background:
+    linear-gradient(90deg, #0b192af5, #0b192ab5 36%, #0b192a15 75%),
+    linear-gradient(0deg, #0b192a80, transparent 45%);
+}
+.race-stage:not(.race-active) .race-top {
+  border-bottom: 1px solid #ffffff18;
+  padding-bottom: 20px;
+  letter-spacing: 0;
+}
+.race-stage:not(.race-active) .race-intro {
+  max-width: 530px;
+}
+.race-stage:not(.race-active) .race-intro h1 {
+  font-weight: 800;
+  letter-spacing: -3px;
+  text-shadow: 0 5px 35px #07132140;
+}
+.race-stage:not(.race-active) .race-buttons button {
+  border-radius: 9px;
+}
+.race-stage:not(.race-active) .race-primary {
+  box-shadow:
+    inset 0 1px 0 #ffffff50,
+    0 8px 32px #ff764f20;
+}
+.race-intro .race-input-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  color: #91a4b3;
+  font-size: 11px;
+}
+.race-input-hint kbd {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 5px 8px;
+  border: 1px solid #ffffff25;
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  color: #d3dce3;
+  background: #ffffff06;
+}
 .race-app button {
   border-radius: 5px;
   background: #ffffff16;

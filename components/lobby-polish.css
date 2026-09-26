@@ -1,0 +1,357 @@
+/* Shared lobby finishes. Keep gameplay overlays and phone controls independent. */
+.race-stage:not(.race-active) .race-top-actions button:first-child {
+  display: none;
+}
+.fish-scene:not(.fishing-active)
+  .fish-top-actions
+  button:has(svg.lucide-smartphone) {
+  display: none;
+}
+.shell:not(.phone-shell) {
+  background:
+    radial-gradient(ellipse at 90% 0%, #3445393b, transparent 48%), #0b1012;
+  padding: 26px clamp(18px, 4vw, 72px);
+}
+.home-header {
+  min-height: 64px;
+  letter-spacing: 0;
+  padding-bottom: 22px;
+  flex-wrap: wrap;
+}
+.home-header .brand {
+  gap: 12px;
+}
+.home-header .brand b {
+  font-size: 17px;
+  letter-spacing: 2px;
+}
+.home-header .brand-symbol {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #d9fd6240;
+  border-radius: 9px;
+  background: #d9fd6210;
+  color: #d9fd62;
+  font-size: 24px;
+}
+.game-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #ffffff12;
+  border-radius: 10px;
+  background: #ffffff04;
+}
+.game-nav a {
+  padding: 9px 23px;
+  border-radius: 7px;
+  color: #91a3aa;
+  text-decoration: none;
+  font-size: 13px;
+  transition:
+    color 0.18s,
+    background 0.18s;
+}
+.game-nav a:hover {
+  background: #ffffff09;
+  color: #fff;
+}
+.game-nav a[aria-current='page'] {
+  background: #d9fd6217;
+  color: #dcf690;
+  box-shadow: inset 0 0 0 1px #d9fd6222;
+}
+.home-header .role-toggle {
+  border-radius: 8px;
+  font-size: 12px;
+}
+.race-app .race-nav,
+.fish-app .fish-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 4vw;
+  height: 80px;
+  border-bottom: 1px solid #ffffff12;
+  letter-spacing: 0;
+  background: #0d1923;
+}
+.fish-app .fish-header {
+  background: #0c2329;
+}
+.race-app .race-nav .lobby-brand,
+.fish-app .fish-header .lobby-brand {
+  color: #ebf1e5;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+}
+.race-app .race-nav button {
+  margin-left: 0;
+}
+.race-nav .game-nav a,
+.fish-header .game-nav a {
+  font-size: 13px;
+  letter-spacing: 0;
+  padding: 9px 23px;
+}
+.race-nav .game-nav a[aria-current='page'] {
+  background: #ff764f1a;
+  color: #ffab8a;
+  box-shadow: inset 0 0 0 1px #ff764f30;
+}
+.fish-header .game-nav a[aria-current='page'] {
+  background: #bceacb17;
+  color: #c5ecd2;
+}
+.race-app .race-stage {
+  height: calc(100dvh - 80px);
+}
+.race-app .race-stage.race-active {
+  height: 100dvh;
+}
+.site-footer {
+  margin: 0;
+  padding: 18px 4vw;
+  font-size: 10px;
+  border-color: #ffffff0d;
+  letter-spacing: 1px;
+  background: #0b1012;
+}
+.site-footer a {
+  color: #91a39d;
+  text-decoration: none;
+  letter-spacing: 0;
+}
+.shell:not(.phone-shell) .topline {
+  padding: 32px 0 25px;
+}
+.shell:not(.phone-shell) .topline .eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #91a58c;
+}
+.shell:not(.phone-shell) .game-title {
+  font-size: clamp(27px, 3vw, 40px);
+  margin-top: 9px;
+  letter-spacing: -1.5px;
+}
+.shell:not(.phone-shell) .topline .live {
+  padding: 9px 12px;
+  background: #ffffff04;
+  border: 1px solid #ffffff0c;
+  border-radius: 20px;
+  font-size: 11px;
+}
+.shell:not(.phone-shell) .host-grid {
+  border-color: #ffffff19;
+  border-radius: 16px;
+  box-shadow:
+    0 24px 70px #0005,
+    0 1px 0 #ffffff09;
+}
+.shell:not(.phone-shell) .console {
+  background: linear-gradient(145deg, #1b2525, #111a1c 65%);
+  border-left: 1px solid #ffffff0d;
+  padding: 30px 25px;
+}
+.arena.is-ready .hud-top,
+.arena.is-ready .hud-bottom,
+.arena.is-ready .campaign-hud,
+.arena.is-ready .crosshair {
+  display: none;
+}
+.arena.is-ready .overlay {
+  background: linear-gradient(90deg, #09161cdd, #09161c70 60%, transparent);
+}
+.arena.is-ready .overlay > .eyebrow {
+  display: none;
+}
+.arena.is-ready .overlay h2 {
+  font-size: clamp(28px, 3.2vw, 48px);
+  letter-spacing: -2px;
+}
+.arena.is-ready .overlay button {
+  border-radius: 9px;
+  box-shadow:
+    inset 0 1px 0 #ffffff60,
+    0 8px 28px #d9fd621a;
+}
+.fish-scene:not(.fishing-active) .catch-count,
+.fish-scene:not(.fishing-active) button[aria-label='일시정지 또는 계속'],
+.fish-scene:not(.fishing-active) button[aria-label='메인화면으로 돌아가기'] {
+  display: none;
+}
+.console .section-label {
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  color: #a8bbad;
+}
+.console h2 {
+  font-size: 29px;
+  letter-spacing: -1.5px;
+  line-height: 1.35;
+  margin: 27px 0 14px;
+}
+.console > p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #94a5a5;
+}
+.console .pair-button {
+  width: 100%;
+  padding: 15px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  box-shadow:
+    inset 0 1px 0 #ffffff60,
+    0 5px 20px #b6d45014;
+}
+.console .pair-box {
+  border-radius: 10px;
+  border-color: #ffffff16;
+  background: #0c1518;
+}
+.controller-help {
+  margin: 0 0 24px;
+  font-size: 12px;
+  color: #afc0bc;
+}
+.controller-help summary {
+  cursor: pointer;
+  padding: 5px 0;
+}
+.controller-help summary:hover {
+  color: #e6f2df;
+}
+.controller-help .control-note {
+  margin-top: 20px;
+}
+.controller-help .control-note p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.console .mode-buttons {
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid #ffffff12;
+  border-radius: 9px;
+  background: #080f1250;
+}
+.console .mode-buttons button {
+  border: 0;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 10px;
+}
+.console .mode-buttons button.selected {
+  background: #314038;
+  color: #ddf3c8;
+  box-shadow: inset 0 0 0 1px #b5cf9529;
+}
+.shell .underbar {
+  color: #7f9399;
+  font-size: 11px;
+  gap: 18px;
+  padding: 16px 2px;
+}
+.shell .underbar .quiet {
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.shell .mission-note {
+  gap: 13px;
+  border: 0;
+  padding: 6px 0 26px;
+  background: none;
+}
+.shell .mission-note > span {
+  color: #87998f;
+  font-size: 11px;
+  padding: 3px 7px;
+  border: 1px solid #9fbf9825;
+  border-radius: 4px;
+}
+.shell .mission-note b {
+  font-size: 12px;
+  font-weight: 400;
+  color: #adbbb5;
+}
+.shell footer {
+  font-size: 10px;
+  padding-top: 18px;
+  letter-spacing: 1px;
+  border-color: #ffffff0d;
+}
+.shell footer a {
+  color: #91a39d;
+  text-decoration: none;
+  letter-spacing: 0;
+}
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+@media (max-width: 740px) {
+  .shell > .home-header > .brand { flex-basis: auto; }
+  .shell > .home-header > .role-toggle { flex: none; font-size: 11px; padding: 8px; }
+  .home-header .brand b { font-size: 14px; letter-spacing: 1.4px; }
+  .home-header .brand { gap: 8px; }
+  .home-header {
+    gap: 12px;
+  }
+  .home-header .role-toggle {
+    margin-left: auto;
+  }
+  .home-header .game-nav {
+    order: 3;
+    width: 100%;
+  }
+  .game-nav a {
+    flex: 1;
+    text-align: center;
+    padding: 9px 12px;
+  }
+  .shell:not(.phone-shell) .console {
+    padding: 24px;
+    border-left: 0;
+  }
+  .shell:not(.phone-shell) .topline {
+    padding: 24px 0 20px;
+  }
+  .shell .underbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .race-app .race-nav,
+  .fish-app .fish-header {
+    height: auto;
+    min-height: 106px;
+    flex-wrap: wrap;
+    padding: 14px 18px;
+    gap: 10px;
+  }
+  .race-nav .game-nav,
+  .fish-header .game-nav {
+    order: 3;
+    width: 100%;
+  }
+  .race-app .race-stage,
+  .fish-app .fish-scene {
+    height: calc(100dvh - 116px);
+  }
+  .race-app .race-stage.race-active,
+  .fish-app .fish-scene.fishing-active {
+    height: 100dvh;
+  }
+  .race-nav .game-nav a,
+  .fish-header .game-nav a {
+    padding: 8px 12px;
+  }
+}

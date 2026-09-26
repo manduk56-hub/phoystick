@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import '../components/lobby-polish.css';
 :root,
 .dark {
   --background: #090d10;
