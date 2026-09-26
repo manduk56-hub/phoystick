@@ -10,9 +10,23 @@ export const TRACK_LENGTH = 2400;
 export const TOTAL_LAPS = 3;
 export const RACE_DISTANCE = TRACK_LENGTH * TOTAL_LAPS;
 // Sample by arc length so the closed circuit uses uniform metre coordinates.
+// A permanent circuit: pit straight, sweeping turns, hairpin and an infield S.
+const controls = [
+  [0, -300], [180, -300], [300, -240], [330, -100],
+  [240, 0], [150, 70], [235, 155], [280, 260],
+  [150, 310], [-30, 280], [-110, 180], [-210, 220],
+  [-310, 170], [-320, 40], [-260, -90], [-300, -220], [-180, -300],
+];
 const raw = Array.from({ length: 2049 }, (_, i) => {
-  const t = (i / 2048) * Math.PI * 2;
-  return { x: 270 * Math.cos(t) + 65 * Math.cos(3 * t), z: 390 * Math.sin(t) };
+  const t = i / 2048 * controls.length;
+  const k = Math.floor(t), f = t - k;
+  const p = (offset: number, axis: number) => controls[(k + offset + controls.length) % controls.length][axis];
+  const spline = (axis: number) => 0.5 * (
+    2 * p(0, axis) + (-p(-1, axis) + p(1, axis)) * f +
+    (2*p(-1, axis)-5*p(0, axis)+4*p(1, axis)-p(2, axis))*f*f +
+    (-p(-1, axis)+3*p(0, axis)-3*p(1, axis)+p(2, axis))*f*f*f
+  );
+  return { x: spline(0), z: spline(1) };
 });
 const lengths = [0];
 for (let i = 1; i < raw.length; i++)
@@ -40,6 +54,23 @@ export function trackHeading(d: number) {
   const a = trackPoint(d - 1),
     b = trackPoint(d + 1);
   return Math.atan2(b.x - a.x, b.z - a.z);
+}
+export function trackPosition(distance: number, lateral = 0) {
+  const p = trackPoint(distance), h = trackHeading(distance);
+  return { x: p.x + Math.cos(h) * lateral, z: p.z - Math.sin(h) * lateral };
+}
+export const TRACK_SAMPLES = Array.from({ length: 601 }, (_, i) => ({
+  distance: i / 600 * TRACK_LENGTH, ...trackPoint(i / 600 * TRACK_LENGTH),
+}));
+const bounds = TRACK_SAMPLES.reduce((b, p) => ({
+  minX: Math.min(b.minX, p.x), maxX: Math.max(b.maxX, p.x),
+  minZ: Math.min(b.minZ, p.z), maxZ: Math.max(b.maxZ, p.z),
+}), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+const mapScale = 164 / Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ);
+export function trackMapPoint(distance: number, lateral = 0) {
+  const p = trackPosition(distance, lateral);
+  return { x: 100 + (p.x - (bounds.minX + bounds.maxX)/2)*mapScale,
+    y: 100 - (p.z - (bounds.minZ + bounds.maxZ)/2)*mapScale };
 }
 export function trackCurve(d: number) {
   const a = trackHeading(d - 5),

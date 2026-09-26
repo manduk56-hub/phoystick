@@ -17,6 +17,9 @@ import {
   TOTAL_LAPS,
   RACE_DISTANCE,
   trackPoint,
+  trackHeading,
+  trackMapPoint,
+  TRACK_SAMPLES,
   type DriveInput,
   type RaceState,
   type Gravity,
@@ -27,13 +30,10 @@ const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)
     .toString()
     .padStart(2, '0')}:${(seconds % 60).toFixed(1).padStart(4, '0')}`;
-const mapPoint = (d: number) => {
-  const p = trackPoint(d);
-  return { x: 100 + p.x / 5.6, y: 100 + p.z / 5.6 };
-};
+const mapPoint = trackMapPoint;
 const mapPath =
-  Array.from({ length: 161 }, (_, i) => {
-    const p = mapPoint((i / 160) * TRACK_LENGTH);
+  TRACK_SAMPLES.map((sample, i) => {
+    const p = mapPoint(sample.distance);
     return `${i ? 'L' : 'M'}${p.x},${p.y}`;
   }).join(' ') + ' Z';
 function CircuitMap({ state }: { state: RaceState }) {
@@ -41,19 +41,32 @@ function CircuitMap({ state }: { state: RaceState }) {
     <div className="race-circuit-map">
       <span>APEX INTERNATIONAL</span>
       <svg viewBox="0 0 200 200" aria-label="서킷과 선수 위치">
-        <path d={mapPath} fill="none" stroke="#ffffff65" strokeWidth="5" />
+        <path d={mapPath} fill="none" stroke="#182531" strokeWidth="8" />
+        <path d={mapPath} fill="none" stroke="#ffffffb0" strokeWidth="3" />
+        <path d={TRACK_SAMPLES.filter(p => p.distance >= 8 && p.distance <= 120).map((p,i) => {
+          const point = mapPoint(p.distance,-10);
+          return `${i?'L':'M'}${point.x},${point.y}`;
+        }).join(' ')} fill="none" stroke="#ff41aa" strokeWidth="1.5" />
+        {(() => {
+          const p = mapPoint(0);
+          return <g transform={`translate(${p.x},${p.y}) rotate(${trackHeading(0)*180/Math.PI})`}><rect x="-5" y="-2" width="10" height="4" fill="#fff" /><path d="M-5,-2 h2 v2 h2 v2 h2 v-2 h2 v-2 h2" fill="none" stroke="#192330" strokeWidth="2" /></g>;
+        })()}
         {state.standings.map((c) => {
-          const p = mapPoint(c.distance);
+          const p = mapPoint(c.distance, c.player ? state.lateral : 0);
           return (
             <circle
               key={c.name}
               cx={p.x}
               cy={p.y}
               r={c.player ? 5 : 3}
-              fill={c.player ? '#f9e45b' : '#f4f5f6'}
+              fill={c.player ? '#ff41aa' : '#f4f5f6'}
             />
           );
         })}
+        {(() => {
+          const p = mapPoint(state.distance,state.lateral);
+          return <path d="M0,-8 L5,6 L0,3 L-5,6 Z" fill="#fff" stroke="#ff41aa" strokeWidth="1.5" transform={`translate(${p.x},${p.y}) rotate(${trackHeading(state.distance) * 180 / Math.PI})`} />;
+        })()}
       </svg>
       <small>2.4 KM · 3 LAPS · GT SPRINT</small>
     </div>
@@ -191,7 +204,11 @@ function Host() {
     [connection, setConnection] = useState('폰 연결 대기'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [active, setActive] = useState(false);
+    [active, setActive] = useState(false),
+    [cameraMode, setCameraMode] = useState('chase');
+  function cycleCamera() {
+    if (scene.current) setCameraMode(scene.current.cycleCamera());
+  }
   useEffect(() => {
     let s: RacingScene;
     try {
@@ -212,6 +229,7 @@ function Host() {
       )
         e.preventDefault();
       keys.current.add(e.code);
+      if (e.code === 'KeyC' && !e.repeat) setCameraMode(s.cycleCamera());
       if (e.code === 'Space' && !e.repeat) {
         if (['ready', 'finished'].includes(s.model.state.phase)) {
           remote.current = false;
@@ -365,6 +383,9 @@ function Host() {
           </b>
         </div>
         <div className="race-top-actions">
+          <button onClick={cycleCamera} aria-label="카메라 시점 전환">
+            {{ chase: '추적', far: '원거리', hood: '보닛', cockpit: '실내', overview: '서킷 전체' }[cameraMode]} · C
+          </button>
           <button
             onClick={() => {
               if (scene.current && state.phase !== 'ready')
@@ -497,6 +518,11 @@ function Host() {
             <span>{(state.distance / 1000).toFixed(2)} / 7.20 KM</span>
           </div>
           <div className="race-dashboard">
+            <svg className="race-tachometer" viewBox="0 0 220 180" aria-label={`${state.rpm} RPM`}>
+              <path className="rev-track" d="M26 148 A94 94 0 1 1 194 148" pathLength="100" />
+              <path className={'rev-value ' + (state.rpm > 6500 ? 'redline' : '')} d="M26 148 A94 94 0 1 1 194 148" pathLength="100" strokeDasharray={`${Math.min(100, state.rpm / 7500 * 100)} 100`} />
+              <text x="110" y="31" textAnchor="middle">RPM × 1000</text>
+            </svg>
             <div className="race-gear">
               <span>GEAR</span>
               <b>{state.gear}</b>
@@ -521,7 +547,7 @@ function Host() {
             </span>
           </div>
           <div className="race-key-hint">
-            ↑ / W 가속 · ↓ / S 제동 · ← → 조향 · SPACE 일시정지
+            ↑ / W 가속 · ↓ / S 제동 · ← → 조향 · C 시점 · SPACE 일시정지
           </div>
           {state.offroad && state.phase === 'racing' && (
             <div className="race-warning">

@@ -1250,3 +1250,68 @@
   border: 0;
   min-width: 0;
 }
+
+/* Corner HUD leaves the road and the player car in clear view. */
+.race-active .race-classification {
+  max-height: max(80px, calc(100dvh - 510px));
+  overflow-y: auto;
+}
+.race-active .race-circuit-map {
+  display: block;
+  top: auto;
+  right: auto;
+  left: max(24px, env(safe-area-inset-left));
+  bottom: max(38px, env(safe-area-inset-bottom));
+  width: 205px;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #17232c70, #17232c15);
+  filter: drop-shadow(0 2px 3px #0008);
+}
+.race-active .race-circuit-map > span { font-size: 9px; letter-spacing: 2px; }
+.race-active .race-circuit-map svg { width: 100%; height: 165px; }
+.race-active .race-circuit-map small { font-size: 8px; }
+.race-active .race-dashboard {
+  left: auto;
+  right: max(28px, env(safe-area-inset-right));
+  bottom: max(35px, env(safe-area-inset-bottom));
+  width: 220px;
+  height: 180px;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  padding-top: 38px;
+  box-sizing: border-box;
+  text-shadow: 0 2px 5px #000a;
+}
+.race-tachometer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.race-tachometer path { fill: none; stroke-width: 5; stroke-linecap: butt; }
+.race-tachometer .rev-track { stroke: #ffffff40; }
+.race-tachometer .rev-value { stroke: #fff; transition: stroke-dasharray 80ms linear; }
+.race-tachometer .redline { stroke: #ff41aa; }
+.race-tachometer text { fill: #fff9; font: 8px Arial, sans-serif; letter-spacing: 1px; }
+.race-active .race-speed { display: flex; flex-direction: column; align-items: center; }
+.race-active .race-speed b { font-size: 72px; font-weight: 700; font-style: italic; letter-spacing: -4px; font-variant-numeric: tabular-nums; }
+.race-active .race-speed span { font-size: 11px; margin: 8px 0 0; letter-spacing: 2px; }
+.race-active .race-gear { text-align: center; border-right: 1px solid #ffffff55; padding-right: 12px; }
+.race-active .race-gear b { font: italic 36px Arial, sans-serif; color: #fff; }
+.race-active .race-gear span { display: none; }
+.race-active .race-gear small { font-size: 8px; letter-spacing: 1px; }
+.race-active .race-dashboard .race-wheel-mini,
+.race-active .race-dashboard .race-pedals,
+.race-active .race-rev { display: none; }
+.race-active .race-key-hint { left: 50%; transform: translateX(-50%); width: max-content; max-width: 90%; font-size: 10px; }
+.race-active .race-vignette { background: linear-gradient(0deg, #0c172b55, transparent 28%, transparent 80%, #0c172b44); }
+@media (max-width: 700px), (max-height: 560px) {
+  .race-active .race-circuit-map { width: 135px; bottom: 26px; left: 14px; padding: 6px; }
+  .race-active .race-circuit-map svg { height: 105px; }
+  .race-active .race-circuit-map > span, .race-active .race-circuit-map small { display: none; }
+  .race-active .race-dashboard { width: 165px; height: 135px; right: 14px; bottom: 24px; padding-top: 28px; }
+  .race-active .race-speed b { font-size: 52px; }
+  .race-active .race-speed span { font-size: 9px; }
+  .race-active .race-gear b { font-size: 28px; }
+}
+@media (pointer: coarse) {
+  .race-active .race-dashboard, .race-active .race-circuit-map { bottom: 155px; }
+}

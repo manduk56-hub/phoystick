@@ -1,9 +1,13 @@
+import { buildCircuit } from './racing-circuit.ts';
 import { trackCar } from './object-design.ts';
 import * as T from 'three';
 import {
   cinematicLight,
   scannedMaterial,
   assetNotice,
+  gameModel,
+  fitModel,
+  disposeModel,
 } from './graphics-assets.ts';
 import { Cockpit } from './racing-cockpit.ts';
 
@@ -12,24 +16,57 @@ import {
   localTrack,
   trackHeading,
   TRACK_LENGTH,
+  trackPoint,
   type RaceState,
 } from './racing-model.ts';
 
 const car = trackCar;
 export class RacingScene {
   model = new RacingModel();
+  circuit = buildCircuit();
   scene = new T.Scene();
-  camera = new T.PerspectiveCamera(62, 1, 0.1, 650);
+  camera = new T.PerspectiveCamera(62, 1, 0.1, 2000);
   renderer: T.WebGLRenderer;
   cockpit: Cockpit;
   traffic: T.Group[] = [];
-  strips: { mesh: T.Mesh; left: number; right: number; height: number }[] = [];
-  scenery: T.Group[] = [];
   finish = new T.Group();
   disposed = false;
   releaseLook: () => void;
   notice: ReturnType<typeof assetNotice>;
-  detailedTraffic: T.Group[] = [];
+  player = car(0xffbc24);
+  cameraMode: 'chase' | 'far' | 'hood' | 'cockpit' | 'overview' = 'chase';
+  cameraTarget = new T.Vector3();
+  raceFog = new T.Fog(0xaebcc4, 250, 1100);
+  cycleCamera() {
+    const modes = ['chase', 'far', 'hood', 'cockpit', 'overview'] as const;
+    this.cameraMode = modes[(modes.indexOf(this.cameraMode) + 1) % modes.length];
+    return this.cameraMode;
+  }
+  async loadExterior(target: T.Group, color?: number) {
+    const asset = await gameModel('car');
+    if (this.disposed) { disposeModel(asset.scene); return; }
+    asset.scene.rotation.y = Math.PI;
+    asset.scene.traverse((o) => {
+      if (!(o instanceof T.Mesh)) return;
+      for (const material of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (!(material instanceof T.MeshStandardMaterial)) continue;
+        if (color !== undefined && /^Paint 1 /.test(material.name))
+          material.color.setHex(color);
+        material.envMapIntensity = 1.1;
+        if (material.name === 'Brakelight') {
+          material.emissive.setHex(0xff2318);
+          material.emissiveIntensity = 0.7;
+        }
+      }
+    });
+    const detailed = fitModel(asset.scene, 4.5, 'z');
+    for (const child of [...target.children]) {
+      target.remove(child);
+      disposeModel(child);
+    }
+    target.add(detailed);
+    target.userData.detailed = true;
+  }
   frame = 0;
   last = 0;
   emit = 0;
@@ -44,15 +81,12 @@ export class RacingScene {
     this.releaseLook = cinematicLight(this.renderer, this.scene, 0.85, true);
     this.notice = assetNotice(canvas, '차량 모델');
     this.cockpit = new Cockpit();
-    void this.cockpit
-      .loadDetailed()
-      .then(() => this.notice.done())
-      .catch(() => this.notice.fail());
 
     this.camera.add(this.cockpit);
     this.scene.add(this.camera);
+    this.scene.add(this.player);
     this.camera.position.set(-0.3, 1.35, 0.25);
-    this.scene.fog = new T.Fog(0xaebcc4, 100, 440);
+    this.scene.fog = this.raceFog;
     this.scene.add(new T.HemisphereLight(0xb5e0ff, 0x776b55, 1.5));
     const sun = new T.DirectionalLight(0xffe3ad, 3);
     sun.position.set(-40, 65, -110);
@@ -101,104 +135,23 @@ export class RacingScene {
         scannedMaterial('rock_boulder_dry', 8),
       );
       mountain.scale.set(75 + (i % 3) * 25, 60 + (i % 4) * 30, 65);
-      mountain.position.set(-500 + i * 75, 15, -360 - (i % 3) * 60);
-      this.scene.add(mountain);
+      const angle = i / 15 * Math.PI * 2;
+      mountain.position.set(Math.cos(angle) * 850, 15, Math.sin(angle) * 850);
+      this.circuit.add(mountain);
     }
-    const strip = (
-      left: number,
-      right: number,
-      color: number,
-      height = 0.015,
-    ) => {
-      const g = new T.BufferGeometry();
-      g.setAttribute(
-        'position',
-        new T.BufferAttribute(new Float32Array(120 * 18), 3),
-      );
-      const m = new T.Mesh(
-        g,
-        left === -5.3
-          ? scannedMaterial('asphalt_02')
-          : new T.MeshBasicMaterial({ color, side: T.DoubleSide }),
-      );
-      g.setAttribute(
-        'uv',
-        new T.BufferAttribute(new Float32Array(120 * 12), 2),
-      );
-      g.setAttribute(
-        'normal',
-        new T.BufferAttribute(
-          Float32Array.from({ length: 120 * 18 }, (_, i) =>
-            i % 3 === 1 ? 1 : 0,
-          ),
-          3,
-        ),
-      );
-      m.receiveShadow = true;
-      m.frustumCulled = false;
-      this.scene.add(m);
-      this.strips.push({ mesh: m, left, right, height });
-    };
-    strip(-6.3, 6.3, 0xbeb2ae);
-    strip(-5.3, 5.3, 0x303946, 0.025);
-    strip(-5.25, -5.07, 0xf8ecd5, 0.032);
-    strip(5.07, 5.25, 0xf8ecd5, 0.032);
-    strip(-5.95, -5.3, 0xd82f3b, 0.04);
-    strip(5.3, 5.95, 0xd82f3b, 0.04);
-    for (let i = 0; i < 48; i++) {
-      const g = new T.Group();
-      const barrier = new T.Mesh(
-        new T.BoxGeometry(0.3, 0.75, 18),
-        new T.MeshStandardMaterial({
-          color: i % 4 < 2 ? 0xe7e9e8 : 0xd63443,
-          roughness: 0.7,
-        }),
-      );
-      barrier.position.y = 0.4;
-      g.add(barrier);
-      if (i % 6 === 0) {
-        const fence = new T.Mesh(
-          new T.BoxGeometry(0.08, 1.5, 18),
-          new T.MeshStandardMaterial({ color: 0x819199, wireframe: true }),
-        );
-        fence.position.y = 1.5;
-        g.add(fence);
-      }
-      this.scenery.push(g);
-      this.scene.add(g);
-    }
-    for (let i = 0; i < 32; i++) {
-      const g = new T.Group();
-      for (let row = 0; row < 4; row++) {
-        const seats = new T.Mesh(
-          new T.BoxGeometry(10, 0.7, 1.3),
-          new T.MeshStandardMaterial({ color: row % 2 ? 0xc4ccd3 : 0x3d536b }),
-        );
-        seats.position.set(0, row * 0.7, row * 1.3);
-        g.add(seats);
-      }
-      const roof = new T.Mesh(
-        new T.BoxGeometry(11, 0.18, 7),
-        new T.MeshStandardMaterial({ color: 0xe8edef }),
-      );
-      roof.position.set(0, 4.8, 2);
-      g.add(roof);
-      for (const x of [-4.8, 4.8]) {
-        const pole = new T.Mesh(
-          new T.BoxGeometry(0.15, 4.8, 0.15),
-          new T.MeshStandardMaterial({ color: 0x4d5663 }),
-        );
-        pole.position.set(x, 2.4, 2);
-        g.add(pole);
-      }
-      this.scenery.push(g);
-      this.scene.add(g);
-    }
+    this.scene.add(this.circuit);
     this.traffic = this.model.traffic.map((c) => {
       const m = car(c.color);
       this.scene.add(m);
       return m;
     });
+    void Promise.all([
+      this.cockpit.loadDetailed(),
+      this.loadExterior(this.player),
+      ...this.traffic.map((vehicle, i) =>
+        this.loadExterior(vehicle, this.model.traffic[i].color)),
+    ]).then(() => { if (!this.disposed) this.notice.done(); })
+      .catch(() => { if (!this.disposed) this.notice.fail(); });
     for (let i = 0; i < 12; i++)
       for (let j = 0; j < 2; j++) {
         const q = new T.Mesh(
@@ -216,7 +169,10 @@ export class RacingScene {
       p.position.set(x, 2.7, 0);
       this.finish.add(p);
     }
-    this.scene.add(this.finish);
+    const startPoint = trackPoint(0);
+    this.finish.position.set(startPoint.x, 0, -startPoint.z);
+    this.finish.rotation.y = -trackHeading(0);
+    this.circuit.add(this.finish);
     this.resize = new ResizeObserver(() => {
       const { width, height } = canvas.getBoundingClientRect();
       if (!width || !height) return;
@@ -231,56 +187,10 @@ export class RacingScene {
     const dt = this.last ? Math.min((now - this.last) / 1000, 0.05) : 0.016;
     this.last = now;
     this.model.tick(dt);
-    const s = this.model.state,
-      step = 4,
-      start = Math.floor(s.distance / step) * step - 12;
-    for (const strip of this.strips) {
-      const pos = strip.mesh.geometry.attributes.position as T.BufferAttribute;
-      const a = pos.array as Float32Array;
-      for (let i = 0; i < 120; i++) {
-        const z0 = start + i * step,
-          z1 = z0 + step,
-          y = strip.height;
-        const l0 = localTrack(z0, s.distance, strip.left),
-          r0 = localTrack(z0, s.distance, strip.right),
-          l1 = localTrack(z1, s.distance, strip.left),
-          r1 = localTrack(z1, s.distance, strip.right);
-        const v = [
-          l0.x,
-          y,
-          l0.z,
-          r0.x,
-          y,
-          r0.z,
-          l1.x,
-          y,
-          l1.z,
-          l1.x,
-          y,
-          l1.z,
-          r0.x,
-          y,
-          r0.z,
-          r1.x,
-          y,
-          r1.z,
-        ];
-        if (
-          (strip.left === -5.95 || strip.left === 5.3) &&
-          Math.floor(z0 / 4) % 2 === 0
-        )
-          v.fill(0);
-        a.set(v, i * 18);
-        (strip.mesh.geometry.attributes.uv.array as Float32Array).set(
-          [0, z0 / 8, 2, z0 / 8, 0, z1 / 8, 0, z1 / 8, 2, z0 / 8, 2, z1 / 8],
-          i * 12,
-        );
-      }
-      pos.needsUpdate = true;
-      strip.mesh.geometry.attributes.uv.needsUpdate = true;
-    }
-    let detailIndex = 0;
-    this.detailedTraffic.forEach((m) => (m.visible = false));
+    const s = this.model.state;
+    const origin = trackPoint(s.distance), heading = trackHeading(s.distance);
+    this.circuit.rotation.y = heading;
+    this.circuit.position.set(-origin.x*Math.cos(heading)+origin.z*Math.sin(heading), 0, origin.x*Math.sin(heading)+origin.z*Math.cos(heading));
     for (let i = 0; i < this.traffic.length; i++) {
       const c = this.model.traffic[i],
         m = this.traffic[i],
@@ -302,43 +212,47 @@ export class RacingScene {
         if (o.name === 'brake' && o instanceof T.Mesh)
           (o.material as T.MeshStandardMaterial).emissiveIntensity =
             c.speed < (m.userData.previousSpeed ?? c.speed) - 0.01 ? 3.5 : 1;
+        if (o instanceof T.Mesh) {
+          for (const material of Array.isArray(o.material) ? o.material : [o.material]) {
+            if (material instanceof T.MeshStandardMaterial && material.name === 'Brakelight')
+              material.emissiveIntensity = c.speed < (m.userData.previousSpeed ?? c.speed) - 0.01 ? 3.5 : 0.7;
+          }
+        }
       });
       m.userData.previousSpeed = c.speed;
-      if (z > -18 && z < 150 && detailIndex < this.detailedTraffic.length) {
-        const real = this.detailedTraffic[detailIndex++];
-        real.visible = true;
-        real.position.copy(m.position);
-        real.rotation.copy(m.rotation);
-        m.visible = false;
-      }
     }
-    this.scenery.forEach((m, i) => {
-      const spacing = i < 48 ? 18 : 31,
-        z =
-          Math.floor(s.distance / spacing) * spacing +
-          Math.floor((i < 48 ? i : i - 48) / 2) * spacing;
-      const side = i % 2 ? 1 : -1,
-        offset = i < 48 ? 8.5 : 22 + (i % 3) * 12;
-      const p = localTrack(z, s.distance, offset * side);
-      m.position.set(p.x, 0, p.z);
-      m.rotation.y = -(trackHeading(z) - trackHeading(s.distance));
+    const inside = this.cameraMode === 'cockpit';
+    const chase = this.cameraMode === 'chase' || this.cameraMode === 'far';
+    this.cockpit.visible = inside;
+    this.player.visible = chase;
+    this.player.position.set(s.lateral, 0.04, 0);
+    this.player.rotation.set(0, -s.input.steer * 0.10, -s.input.steer * s.speed * 0.0005);
+    this.player.traverse((o) => {
+      if (o.name === 'wheel') o.rotation.x -= s.speed * dt / 0.36;
+      if (o.name === 'brake' && o instanceof T.Mesh)
+        (o.material as T.MeshStandardMaterial).emissiveIntensity = s.input.brake > 0 ? 4 : 1;
     });
-    const finishDistance =
-      Math.ceil((s.distance + 0.01) / TRACK_LENGTH) * TRACK_LENGTH;
-    const f = localTrack(finishDistance, s.distance);
-    this.finish.position.set(f.x, 0, f.z);
-    this.finish.rotation.y = -(
-      trackHeading(finishDistance) - trackHeading(s.distance)
+    const far = this.cameraMode === 'far';
+    const speedRatio = Math.min(1, s.speed / 65);
+    const desired = new T.Vector3(
+      s.lateral - (chase ? s.input.steer * 0.45 : inside ? 0.3 : 0),
+      chase ? (far ? 3.8 : 2.65) : inside ? 1.35 : 1.05,
+      chase ? (far ? 10.5 : 7.0) + speedRatio * 1.2 : inside ? 0.25 : -1.65,
     );
-    this.finish.visible = finishDistance - s.distance < 450 || s.distance < 8;
-    if (s.distance < 8) {
-      const startLine = localTrack(0, s.distance);
-      this.finish.position.set(startLine.x, 0, startLine.z);
+    this.camera.position.lerp(desired, 1 - Math.exp(-dt * 8));
+    this.camera.up.set(0,1,0);
+    const look = localTrack(s.distance + (chase ? 22 : 45), s.distance, s.lateral);
+    this.cameraTarget.set(look.x, chase ? 0.95 : 1.2, look.z);
+    this.camera.lookAt(this.cameraTarget);
+    this.camera.fov = chase ? 56 + speedRatio * 9 : 68;
+    if (this.cameraMode === 'overview') {
+      this.player.visible = true;
+      this.camera.position.set(this.circuit.position.x, 930, this.circuit.position.z + 0.01);
+      this.camera.up.set(-Math.sin(heading),0,-Math.cos(heading));
+      this.camera.lookAt(this.circuit.position.x, 0, this.circuit.position.z);
+      this.camera.fov = 58;
     }
-    this.camera.position.set(s.lateral - 0.3, 1.35, 0.25);
-    const look = localTrack(s.distance + 45, s.distance, s.lateral - 0.3);
-    this.camera.lookAt(look.x + s.input.steer * 0.5, 1.2, look.z);
-    this.camera.fov = 68;
+    this.scene.fog = this.cameraMode === 'overview' ? null : this.raceFog;
     this.cockpit.update(s.speed, s.input.steer, this.camera.aspect);
     this.camera.updateProjectionMatrix();
     this.renderer.render(this.scene, this.camera);

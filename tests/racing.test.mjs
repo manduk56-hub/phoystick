@@ -8,6 +8,10 @@ import {
   RACE_DISTANCE,
   trackPoint,
   localTrack,
+  trackPosition,
+  trackHeading,
+  trackMapPoint,
+  TRACK_SAMPLES,
 } from '../lib/racing-model.ts';
 const pose = (roll, pitch, side = 1) => {
   const r = (roll * Math.PI) / 180,
@@ -64,6 +68,28 @@ test('orientation conversion supports native portrait coordinates without angle 
 const tick = (m, t) => {
   for (let i = 0; i < t / 0.02; i++) m.tick(0.02);
 };
+test('whole circuit, driving coordinates and minimap use the same fixed geometry', () => {
+  assert.equal(TRACK_SAMPLES.length,601);
+  for (const originDistance of [0,400,800,1200,1600,2399]) {
+    const origin = trackPoint(originDistance), h = trackHeading(originDistance);
+    for(const sample of TRACK_SAMPLES) {
+      assert.deepEqual({x:sample.x,z:sample.z},trackPoint(sample.distance));
+      for(const lateral of [-5.3,0,5.3]) {
+        const p = trackPosition(sample.distance,lateral);
+        // Three.js group transform of a fixed vertex (x, 0, -z).
+        const actual = {x:(p.x-origin.x)*Math.cos(h)-(p.z-origin.z)*Math.sin(h),
+          z:-(p.x-origin.x)*Math.sin(h)-(p.z-origin.z)*Math.cos(h)};
+        const expected = localTrack(sample.distance,originDistance,lateral);
+        assert.ok(Math.hypot(actual.x-expected.x,actual.z-expected.z)<1e-9);
+        const map = trackMapPoint(sample.distance,lateral);
+        assert.ok(map.x>10 && map.x<190 && map.y>10 && map.y<190);
+      }
+    }
+  }
+  const a = trackPoint(0), b = trackPoint(50), ma = trackMapPoint(0), mb = trackMapPoint(50);
+  assert.ok(Math.abs((mb.x-ma.x)/(b.x-a.x)+(mb.y-ma.y)/(b.z-a.z))<1e-8);
+  assert.deepEqual(trackMapPoint(0),trackMapPoint(TRACK_LENGTH));
+});
 test('countdown, acceleration, braking, pause and finish work end to end', () => {
   const m = new RacingModel();
   m.start();

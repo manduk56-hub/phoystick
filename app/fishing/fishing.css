@@ -100,7 +100,7 @@
   border-color: #bddbd044;
 }
 .fish-scene {
-  background: #326976 url('/assets/lake.png') center center/cover;
+  background: #326976;
   height: calc(100dvh - 80px);
   min-height: 580px;
 }
@@ -1348,6 +1348,36 @@
 }
 .fish-scene.is-paused .fish-bottom {
   visibility: hidden;
+}
+.fishing-active .fish-phase.observing {
+  left: 32px;
+  top: 160px;
+  transform: none;
+  width: min(300px, 30vw);
+  text-align: left;
+  padding: 12px 16px;
+}
+.fish-phase.observing h2 {
+  font-size: 20px;
+  margin: 6px 0;
+}
+.fish-phase.observing p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 620px), (max-height: 520px) {
+  .fishing-active .fish-phase.observing {
+    left: 16px;
+    top: 150px;
+    width: min(240px, 44vw);
+    padding: 8px 10px;
+  }
+  .fish-phase.observing h2 {
+    font-size: 15px;
+  }
+  .fish-phase.observing p {
+    display: none;
+  }
 }
 @media (max-height: 520px) and (orientation: landscape) {
   .fishing-active .fish-bottom {

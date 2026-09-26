@@ -613,6 +613,11 @@ function FishingHost() {
           <div
             className={
               'fish-phase ' +
+              (['casting', 'waiting', 'bite', 'fighting'].includes(
+                state.phase,
+              ) && !state.paused
+                ? 'observing '
+                : '') +
               (notebook ? 'with-notebook ' : '') +
               (state.phase === 'bite' ? 'bite' : '')
             }
