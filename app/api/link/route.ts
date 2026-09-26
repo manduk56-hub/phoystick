@@ -1,12 +1,10 @@
 import { database } from '@/db/raw';
+import { allowedRequestOrigin } from '@/lib/request-origin';
 const json = (v: unknown, s = 200) =>
   Response.json(v, { status: s, headers: { 'Cache-Control': 'no-store' } });
 export async function POST(req: Request) {
   try {
-    if (
-      req.headers.get('origin') &&
-      req.headers.get('origin') !== new URL(req.url).origin
-    )
+    if (!allowedRequestOrigin(req))
       return json({ error: '허용되지 않은 요청' }, 403);
     const b: any = await req.json();
     if (!b || typeof b !== 'object') return json({ error: '잘못된 요청' }, 400);
@@ -74,13 +72,46 @@ export async function POST(req: Request) {
         .bind(token, b.code)
         .run();
       if (!r.meta.changes) return json({ error: '이미 연결되었습니다.' }, 409);
-      return json({ code: b.code, token });
+      return json({
+        code: b.code,
+        token,
+        version: JSON.parse(room.status || '{}')._session?.version || 0,
+      });
     }
     const host = b.token === room.host,
       phone = b.token === room.phone && !!room.phone;
     if (!host && !phone) return json({ error: '다시 연결해 주세요.' }, 403);
+    const state = JSON.parse(room.status || '{}');
+    const session = state._session || {
+      game: state.game || 'shooting',
+      version: 0,
+    };
+    if (b.action === 'resume')
+      return json({ code: b.code, token: b.token, ...session });
+    if (b.action === 'menu') return json(session);
+    if (b.action === 'navigate') {
+      if (!['shooting', 'fishing', 'racing'].includes(b.game))
+        return json({ error: '게임을 선택하세요.' }, 400);
+      if (b.version !== session.version)
+        return json({ error: '메뉴가 변경되었습니다. 다시 선택하세요.' }, 409);
+      if (b.game === session.game) return json(session);
+      const next = { game: b.game, version: session.version + 1 };
+      const result = await db
+        .prepare(
+          "UPDATE rooms SET status=?, input=NULL, offer=NULL, answer=NULL WHERE code=? AND COALESCE(json_extract(status, '$._session.version'), 0)=?",
+        )
+        .bind(
+          JSON.stringify({ game: b.game, _session: next }),
+          b.code,
+          session.version,
+        )
+        .run();
+      if (!result.meta.changes) return json({ error: '다시 선택하세요.' }, 409);
+      return json(next);
+    }
     if (b.action === 'read')
       return json({
+        version: session.version,
         paired: !!room.phone,
         offer: phone ? room.offer : null,
         answer: host ? room.answer : null,
@@ -98,15 +129,22 @@ export async function POST(req: Request) {
               ? 'status'
               : null;
     if (!column) return json({ error: '잘못된 요청' }, 400);
-    const value = JSON.stringify(b.data);
+    if ((b.version || 0) !== session.version)
+      return json({ error: '게임이 변경되었습니다.' }, 409);
+    const value = JSON.stringify(
+      b.action === 'status' ? { ...b.data, _session: session } : b.data,
+    );
     if (value.length > 20000)
       return json({ error: '요청이 너무 큽니다.' }, 400);
     await db
-      .prepare(`UPDATE rooms SET ${column}=? WHERE code=?`)
-      .bind(value, b.code)
+      .prepare(
+        `UPDATE rooms SET ${column}=? WHERE code=? AND COALESCE(json_extract(status, '$._session.version'), 0)=?`,
+      )
+      .bind(value, b.code, session.version)
       .run();
     return json({ ok: true });
-  } catch {
+  } catch (error) {
+    console.error('link API failure', error);
     return json(
       { error: '연결 서버에 접근하지 못했습니다. 잠시 후 다시 시도하세요.' },
       503,

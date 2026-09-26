@@ -6,18 +6,28 @@ export type Packet = {
   time: number;
 };
 export async function api(action: string, data: object = {}) {
-  const res = await fetch('/api/link', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...data }),
-    signal: AbortSignal.timeout(7000),
+  let res: Response;
+  try {
+    res = await fetch('/api/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...data }),
+      signal: AbortSignal.timeout(7000),
+    });
+  } catch {
+    throw new Error(
+      '연결을 확인하고 있어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.',
+    );
+  }
+  const r: any = await res.json().catch(() => {
+    throw new Error('서버 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.');
   });
-  const r: any = await res.json();
-  if (!res.ok) throw Error(r.error || '연결 오류');
+  if (!res.ok)
+    throw Object.assign(Error(r.error || '연결 오류'), { status: res.status });
   return r;
 }
 export class Link {
-  room: { code: string; token: string };
+  room: { code: string; token: string; version?: number; relayOnly?: boolean };
   role: string;
   rtc: RTCPeerConnection | null = null;
   channel: RTCDataChannel | null = null;
@@ -31,7 +41,15 @@ export class Link {
   onInput: (p: Packet) => void = () => {};
   onStatus: (p: any) => void = () => {};
   onConnection: (s: string) => void = () => {};
-  constructor(room: { code: string; token: string }, role: string) {
+  constructor(
+    room: {
+      code: string;
+      token: string;
+      version?: number;
+      relayOnly?: boolean;
+    },
+    role: string,
+  ) {
     this.room = room;
     this.role = role;
     this.loop();
@@ -90,7 +108,12 @@ export class Link {
           data: this.latest,
         });
       const r = await api('read', this.room);
-      if (r.paired && !this.rtc) {
+      if (r.version !== (this.room.version || 0)) {
+        this.close();
+        return;
+      }
+      if (r.paired && this.room.relayOnly) this.onConnection('중계 연결');
+      if (r.paired && !this.rtc && !this.room.relayOnly) {
         this.onConnection('중계 연결');
         if (this.role === 'host') await this.setup();
         else if (r.offer) await this.setup(JSON.parse(r.offer));

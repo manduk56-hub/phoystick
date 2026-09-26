@@ -5,6 +5,9 @@ import {
   WheelControl,
   gravityFromOrientation,
   TRACK_LENGTH,
+  RACE_DISTANCE,
+  trackPoint,
+  localTrack,
 } from '../lib/racing-model.ts';
 const pose = (roll, pitch, side = 1) => {
   const r = (roll * Math.PI) / 180,
@@ -78,11 +81,14 @@ test('countdown, acceleration, braking, pause and finish work end to end', () =>
   tick(m, 1);
   assert.equal(m.state.distance, d);
   m.state.paused = false;
-  m.state.distance = TRACK_LENGTH - 0.1;
+  m.state.lapTimes = [60, 60];
+  m.lapStarted = 120;
+  m.state.elapsed = 179;
+  m.state.distance = RACE_DISTANCE - 0.1;
   m.state.speed = 20;
   tick(m, 0.02);
   assert.equal(m.state.phase, 'finished');
-  assert.equal(m.state.distance, TRACK_LENGTH);
+  assert.equal(m.state.distance, RACE_DISTANCE);
 });
 test('collisions slow the car once per impact; off-road applies drag; malformed input is bounded', () => {
   const m = new RacingModel();
@@ -103,4 +109,54 @@ test('collisions slow the car once per impact; off-road applies drag; malformed 
   tick(m, 0.2);
   assert.ok(m.state.offroad);
   assert.ok(m.state.speed < 20);
+});
+
+test('closed circuit is continuous at the line and local forward direction is correct', () => {
+  assert.deepEqual(trackPoint(0), trackPoint(TRACK_LENGTH));
+  const a = trackPoint(TRACK_LENGTH - 0.1),
+    b = trackPoint(0.1);
+  assert.ok(Math.hypot(a.x - b.x, a.z - b.z) < 0.21);
+  assert.ok(localTrack(10, 0).z < -9);
+});
+test('lap timing interpolates line crossing, invalid laps are excluded, restart clears standings', () => {
+  const m = new RacingModel();
+  m.start();
+  m.state.phase = 'racing';
+  m.traffic = [];
+  m.state.distance = TRACK_LENGTH - 0.2;
+  m.state.speed = 20;
+  m.state.elapsed = 60;
+  m.tick(0.02);
+  assert.equal(m.state.lap, 2);
+  assert.equal(m.state.lapTimes.length, 1);
+  assert.ok(m.state.bestLap > 60 && m.state.bestLap < 60.02);
+  const best = m.state.bestLap;
+  m.state.lapValid = false;
+  m.state.distance = 2 * TRACK_LENGTH - 0.2;
+  m.state.elapsed = 119;
+  m.tick(0.02);
+  assert.equal(m.state.bestLap, best);
+  assert.equal(m.state.lastLapValid, false);
+  m.start();
+  assert.equal(m.state.position, 8);
+  assert.equal(m.state.bestLap, null);
+  assert.equal(m.state.lapTimes.length, 0);
+});
+test('rank uses race progress and finish times, AI brakes for bends and stops at the line', () => {
+  const m = new RacingModel();
+  m.start();
+  m.state.phase = 'racing';
+  m.state.distance = 100;
+  m.updateStandings();
+  assert.equal(m.state.position, 1);
+  const c = m.traffic[0];
+  c.z = RACE_DISTANCE - 0.1;
+  c.speed = 30;
+  m.tick(0.02);
+  assert.ok(c.finishTime !== undefined);
+  assert.equal(c.z, RACE_DISTANCE);
+  const d = c.z;
+  m.tick(0.02);
+  assert.equal(c.z, d);
+  assert.equal(m.state.position, 2);
 });

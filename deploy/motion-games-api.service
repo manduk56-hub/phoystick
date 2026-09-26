@@ -1,0 +1,20 @@
+[Unit]
+Description=Motion Games pairing API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/motion-games/current
+Environment=NODE_ENV=production
+Environment=WRANGLER_SEND_METRICS=false
+Environment=WRANGLER_LOG_PATH=/opt/motion-games/shared/logs
+Environment=XDG_CONFIG_HOME=/opt/motion-games/shared/config
+ExecStart=/usr/bin/npx wrangler dev --config dist/server/wrangler.json --port 3002 --ip 127.0.0.1 --log-level warn
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

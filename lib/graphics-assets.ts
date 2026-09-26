@@ -1,3 +1,4 @@
+import { sentinel, riverFish } from './object-design.ts';
 import * as T from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
@@ -10,6 +11,11 @@ function draco() {
 }
 const models = new Map<string, Promise<GLTF>>();
 export function gameModel(name: 'yeti' | 'fish' | 'car') {
+  if (name !== 'car')
+    return Promise.resolve({
+      scene: name === 'yeti' ? sentinel() : riverFish(),
+      animations: [] as T.AnimationClip[],
+    });
   if (!models.has(name))
     models.set(
       name,

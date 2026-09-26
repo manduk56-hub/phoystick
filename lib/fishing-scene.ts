@@ -7,33 +7,45 @@ import {
   assetNotice,
 } from './graphics-assets.ts';
 import { rounded, finish, organic } from './surface.ts';
-import { FishingModel } from './fishing-model.ts';
+import { FishingModel, type FishingState } from './fishing-model.ts';
 export class FishingScene {
   renderer: T.WebGLRenderer;
   scene = new T.Scene();
   camera = new T.PerspectiveCamera(54, 1, 0.1, 200);
   model = new FishingModel();
   bobber = new T.Group();
+  lure = new T.Mesh(
+    new T.SphereGeometry(0.1, 12, 8),
+    new T.MeshStandardMaterial({
+      color: 0xd8d3a5,
+      metalness: 0.85,
+      roughness: 0.18,
+    }),
+  );
+  sun = new T.DirectionalLight(0xffe1ac, 3);
+  rain: T.Points;
   rod = new T.Group();
   line: T.Line;
   water: T.Mesh;
   fish = new T.Group();
   rings: T.Mesh[] = [];
   rodSegments: T.Mesh[] = [];
+  guides: T.Mesh[] = [];
   reel: T.Group;
   resize: ResizeObserver;
   frame = 0;
   last = 0;
   time = 0;
-  onState: (s: any) => void;
+  onState: (s: FishingState) => void;
   emit = 0;
   audio: AudioContext | null = null;
   lastPhase = 'ready';
+  reeling = false;
   disposed = false;
   releaseLook: () => void = () => {};
   notice?: ReturnType<typeof assetNotice>;
   fishVertices: { mesh: T.Mesh; base: Float32Array }[] = [];
-  constructor(canvas: HTMLCanvasElement, onState: (s: any) => void) {
+  constructor(canvas: HTMLCanvasElement, onState: (s: FishingState) => void) {
     this.onState = onState;
     this.renderer = new T.WebGLRenderer({
       canvas,
@@ -48,9 +60,39 @@ export class FishingScene {
     this.camera.position.set(0, 3.4, 8);
     this.camera.lookAt(0, 1.1, -16);
     this.scene.add(new T.HemisphereLight(0xe2f5e8, 0x2c5155, 2.6));
-    const sun = new T.DirectionalLight(0xffe1ac, 3);
+    const sun = this.sun;
     sun.position.set(-12, 20, -20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -18;
+    sun.shadow.camera.right = sun.shadow.camera.top = 18;
+    sun.shadow.normalBias = 0.035;
+    sun.shadow.camera.far = 80;
     this.scene.add(sun);
+    const rainGeometry = new T.BufferGeometry();
+    const rainPositions = new Float32Array(450 * 3);
+    for (let i = 0; i < 450; i++) {
+      rainPositions[i * 3] = Math.random() * 60 - 30;
+      rainPositions[i * 3 + 1] = Math.random() * 18;
+      rainPositions[i * 3 + 2] = 6 - Math.random() * 55;
+    }
+    rainGeometry.setAttribute(
+      'position',
+      new T.BufferAttribute(rainPositions, 3),
+    );
+    this.rain = new T.Points(
+      rainGeometry,
+      new T.PointsMaterial({
+        color: 0xc0d4dc,
+        size: 0.075,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+      }),
+    );
+    this.scene.add(this.rain);
+    this.lure.scale.set(0.5, 0.3, 2.5);
+    this.scene.add(this.lure);
     this.scene.fog = new T.FogExp2(0x729c9e, 0.008);
     const geometry = new T.PlaneGeometry(180, 180, 65, 65);
     geometry.rotateX(-Math.PI / 2);
@@ -135,7 +177,7 @@ export class FishingScene {
     this.reel.add(handle);
     this.reel.position.set(0.18, 0.45, 0);
     this.rod.add(this.reel);
-    this.rod.position.set(0.8, 1, 6.2);
+    this.rod.position.set(1.15, 1.9, 5.2);
     this.rod.rotation.set(-0.7, 0, -0.3);
     for (let i = 3; i < 12; i++) {
       const guide = new T.Mesh(
@@ -144,6 +186,7 @@ export class FishingScene {
       );
       guide.position.set(0, i * 0.31, -0.025);
       this.rod.add(guide);
+      this.guides.push(guide);
     }
     const grip = new T.Mesh(
       new T.CylinderGeometry(0.044, 0.047, 0.68, 32),
@@ -159,7 +202,10 @@ export class FishingScene {
     this.reel.add(bail);
     this.scene.add(this.rod);
     this.line = new T.Line(
-      new T.BufferGeometry(),
+      new T.BufferGeometry().setAttribute(
+        'position',
+        new T.BufferAttribute(new Float32Array(31 * 3), 3),
+      ),
       new T.LineBasicMaterial({
         color: 0xf8edce,
         transparent: true,
@@ -271,6 +317,15 @@ export class FishingScene {
     } catch {}
   }
   action(action: string, value = 0.5) {
+    if (action === 'hold') {
+      this.reeling = false;
+      if (!this.model.state.paused) this.model.pause();
+      this.onState({ ...this.model.state });
+      return;
+    }
+    if (action === 'reelStart') this.reeling = true;
+    if (action === 'reelStop' || action === 'pause' || action === 'recall')
+      this.reeling = false;
     if (action === 'cast') {
       this.model.cast(value);
       this.sound(260);
@@ -279,6 +334,27 @@ export class FishingScene {
     if (action === 'reel') this.model.reel(value);
     if (action === 'flick') this.model.flick();
     if (action === 'pause') this.model.pause();
+    if (
+      [
+        'spot',
+        'bait',
+        'rig',
+        'depth',
+        'drag',
+        'speed',
+        'rod',
+        'gear',
+        'hookSize',
+        'leader',
+      ].includes(action)
+    )
+      this.model.configure(action, value);
+    if (action === 'recall') this.model.recall();
+    if (action === 'feed') this.model.feed();
+    if (action === 'sell') this.model.sell();
+    if (action === 'release') this.model.release();
+    if (action === 'buy') this.model.buy(value);
+    if (action === 'repair') this.model.repair();
     this.onState({ ...this.model.state });
   }
   tick(t: number) {
@@ -286,7 +362,24 @@ export class FishingScene {
     this.last = t;
     if (!this.model.state.paused) this.time += dt;
     this.model.tick(dt);
+    if (this.reeling) this.model.reel(dt * 0.85);
     const s = this.model.state;
+    const daylight = Math.max(0.15, Math.sin(((s.hour - 5) / 14) * Math.PI));
+    this.sun.intensity =
+      (s.weather === 2 ? 0.7 : s.weather === 1 ? 1.4 : 3) * daylight;
+    this.renderer.toneMappingExposure = 0.6 + daylight * 0.5;
+    this.rain.visible = s.weather === 2;
+    if (this.rain.visible && !s.paused) {
+      const drops = this.rain.geometry.attributes.position;
+      for (let i = 0; i < drops.count; i++) {
+        drops.setY(i, drops.getY(i) < 0 ? 18 : drops.getY(i) - dt * 13);
+        drops.setX(
+          i,
+          drops.getX(i) > 30 ? -30 : drops.getX(i) + dt * s.wind * 0.4,
+        );
+      }
+      drops.needsUpdate = true;
+    }
     if (s.phase !== this.lastPhase) {
       if (s.phase === 'bite') this.sound(1100, 0.3);
       if (s.phase === 'caught') this.sound(880, 0.5);
@@ -307,46 +400,66 @@ export class FishingScene {
     attrs.needsUpdate = true;
     const cast = Math.min(1, s.phaseTime / 1.35);
     this.bobber.position.set(
-      Math.sin(this.time * 0.6) * (s.phase === 'fighting' ? 1.8 : 0.08),
+      (s.spot - 1) * 4 +
+        Math.sin(this.time * 0.6) *
+          (s.phase === 'fighting' ? 1.8 : 0.08 + s.wind * 0.025),
       s.phase === 'casting'
         ? Math.sin(cast * Math.PI) * 5 + 0.15
         : s.phase === 'bite'
           ? -0.22 + Math.sin(this.time * 13) * 0.13
-          : 0.14 + Math.sin(this.time * 2.8) * 0.055,
+          : 0.14 + Math.sin(this.time * 2.8) * 0.055 - s.nibble * 0.25,
       3 - s.distance,
     );
-    this.bobber.visible = !['ready', 'caught', 'escaped'].includes(s.phase);
+    const inWater = !['ready', 'caught', 'escaped'].includes(s.phase);
+    this.bobber.visible = inWater && (s.rig === 0 || s.phase === 'casting');
+    this.lure.visible = inWater && s.rig === 2 && s.phase !== 'casting';
+    this.lure.position.copy(this.bobber.position);
+    this.lure.position.y = -0.15;
+    this.lure.rotation.y = this.time * (1 + s.speed * 5);
+    (this.water.material as T.MeshStandardMaterial).color.setHex(
+      s.weather === 2 ? 0x244f59 : s.weather === 1 ? 0x386b70 : 0x27616c,
+    );
     this.bobber.scale.setScalar(
       s.phase === 'casting' ? 1 : Math.max(1, s.distance / 14),
     );
     this.rod.rotation.x =
       s.phase === 'casting'
         ? -1.4 + Math.sin(cast * Math.PI) * 1.4
-        : -0.65 + (s.rod - 0.5) * 0.35;
+        : -1 + (s.rod - 0.5) * 0.65;
     this.rod.rotation.z =
-      -0.3 + Math.sin(this.time * 2) * (s.phase === 'fighting' ? 0.055 : 0.006);
+      0.25 + Math.sin(this.time * 2) * (s.phase === 'fighting' ? 0.055 : 0.006);
+    const biteBend =
+      s.rig === 1 && ['waiting', 'bite'].includes(s.phase)
+        ? s.nibble * 0.45
+        : 0;
     for (let i = 0; i < this.rodSegments.length; i++) {
       const segment = this.rodSegments[i];
-      segment.position.z = -Math.pow(i / 11, 2) * s.tension * 0.65;
-      segment.rotation.x = (-i / 11) * s.tension * 0.4;
+      segment.position.z = -Math.pow(i / 11, 2) * (s.tension + biteBend) * 0.65;
+      segment.rotation.x = (-i / 11) * (s.tension + biteBend) * 0.4;
     }
+    this.guides.forEach((guide, index) => {
+      const fraction = (index + 3) / 11;
+      guide.position.z =
+        -0.025 - fraction * fraction * (s.tension + biteBend) * 0.65;
+      guide.rotation.x = -fraction * (s.tension + biteBend) * 0.4;
+    });
     this.reel.rotation.x = -s.turns * Math.PI * 2;
     this.rod.updateMatrixWorld(true);
     const tip = new T.Vector3(0, 3.6, -s.tension * 0.65).applyMatrix4(
       this.rod.matrixWorld,
     );
-    const points = [];
+    const linePositions = this.line.geometry.attributes.position;
     for (let i = 0; i <= 30; i++) {
       const f = i / 30;
       const p = tip.clone().lerp(this.bobber.position, f);
       p.y -=
         Math.sin(f * Math.PI) *
         (s.phase === 'casting' ? 0.5 : Math.max(0.1, 1 - s.tension) * 1.2);
-      points.push(p);
+      linePositions.setXYZ(i, p.x, p.y, p.z);
     }
-    this.line.geometry.dispose();
-    this.line.geometry = new T.BufferGeometry().setFromPoints(points);
-    this.line.visible = this.bobber.visible;
+    linePositions.needsUpdate = true;
+    this.line.geometry.computeBoundingSphere();
+    this.line.visible = inWater;
     this.rings.forEach((r, i) => {
       const p = (this.time * 0.6 + i / 3) % 1;
       r.position.set(this.bobber.position.x, 0.06, this.bobber.position.z);
@@ -354,7 +467,8 @@ export class FishingScene {
       (r.material as T.MeshBasicMaterial).opacity = (1 - p) * 0.35;
       r.visible = this.bobber.visible && s.phase !== 'casting';
     });
-    this.fish.visible = s.phase === 'caught' || s.phase === 'fighting';
+    this.fish.visible =
+      s.phase === 'caught' || (s.phase === 'fighting' && s.distance < 6);
     if (s.phase === 'caught') {
       this.fish.position.set(0, 2.4, 2);
       this.fish.rotation.set(
@@ -362,7 +476,12 @@ export class FishingScene {
         Math.sin(this.time) * 0.3,
         Math.sin(this.time * 5) * 0.09,
       );
-      this.fish.scale.setScalar(1.2);
+      const size = Math.min(1.7, 0.65 + Math.cbrt(s.weight) * 0.3);
+      this.fish.scale.set(
+        size,
+        size * ([0, 2, 3].includes(s.fishId) ? 1.2 : 0.85),
+        size,
+      );
     } else {
       this.fish.position.copy(this.bobber.position);
       this.fish.position.y = -0.15;
@@ -386,6 +505,7 @@ export class FishingScene {
         );
       }
       p.needsUpdate = true;
+      mesh.geometry.computeVertexNormals();
     }
     this.water.geometry.computeVertexNormals();
     this.emit += dt;
@@ -403,7 +523,7 @@ export class FishingScene {
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     this.scene.traverse((o) => {
-      if (o instanceof T.Mesh || o instanceof T.Line) {
+      if (o instanceof T.Mesh || o instanceof T.Line || o instanceof T.Points) {
         o.geometry.dispose();
         if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
         else o.material.dispose();

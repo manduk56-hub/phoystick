@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-const base = 'http://localhost:3000';
+const base = process.env.TEST_BASE_URL || 'http://localhost:3000';
 async function call(action, body = {}) {
   const response = await fetch(base + '/api/link', {
     method: 'POST',
@@ -103,4 +103,79 @@ assert.equal(
 );
 console.log(
   'PASS: racing pairing, game isolation, steering/pedal relay and speed sync',
+);
+
+assert.equal(
+  (
+    await call('navigate', {
+      ...racePhone.data,
+      token: 'invalid',
+      game: 'fishing',
+      version: 0,
+    })
+  ).status,
+  403,
+);
+const switched = await call('navigate', {
+  ...racePhone.data,
+  game: 'fishing',
+  version: 0,
+});
+assert.equal(switched.status, 200);
+assert.deepEqual(switched.data, { game: 'fishing', version: 1 });
+const resumedHost = await call('resume', raceHost.data);
+const resumedPhone = await call('resume', racePhone.data);
+assert.equal(resumedHost.data.token, raceHost.data.token);
+assert.equal(resumedPhone.data.token, racePhone.data.token);
+assert.equal(resumedPhone.data.game, 'fishing');
+assert.equal((await call('read', raceHost.data)).data.input, null);
+assert.equal((await call('read', racePhone.data)).data.offer, null);
+assert.equal(
+  (
+    await call('input', {
+      ...racePhone.data,
+      data: { events: [{ action: 'start' }] },
+    })
+  ).status,
+  409,
+);
+await call('status', {
+  ...resumedHost.data,
+  data: { game: 'fishing', phase: 'idle' },
+});
+assert.deepEqual((await call('menu', racePhone.data)).data, switched.data);
+assert.equal(
+  (await call('navigate', { ...resumedPhone.data, game: 'invalid' })).status,
+  400,
+);
+assert.equal(
+  (await call('navigate', { ...racePhone.data, version: 0, game: 'racing' }))
+    .status,
+  409,
+);
+await call('input', {
+  ...resumedPhone.data,
+  data: { events: [{ id: 1, action: 'cast' }] },
+});
+assert.equal(
+  JSON.parse((await call('read', resumedHost.data)).data.input).events[0]
+    .action,
+  'cast',
+);
+for (const [game, version] of [
+  ['shooting', 1],
+  ['racing', 2],
+]) {
+  assert.equal(
+    (await call('navigate', { ...racePhone.data, game, version })).status,
+    200,
+  );
+  assert.equal((await call('resume', raceHost.data)).data.game, game);
+  assert.equal(
+    (await call('resume', racePhone.data)).data.version,
+    version + 1,
+  );
+}
+console.log(
+  'PASS: paired menu navigation, same-token resume, stale input rejection and three-game round trip',
 );

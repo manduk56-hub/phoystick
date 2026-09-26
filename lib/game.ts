@@ -1,5 +1,12 @@
+import { sentinel } from './object-design.ts';
 import * as T from 'three';
-import { BARRIERS, ROUTE_LENGTH, SECTORS, canStand, sectorAt } from './campaign.ts';
+import {
+  BARRIERS,
+  ROUTE_LENGTH,
+  SECTORS,
+  canStand,
+  sectorAt,
+} from './campaign.ts';
 import {
   gameModel,
   fitModel,
@@ -232,8 +239,19 @@ export class Game {
     return new T.Mesh(rounded(w, h, d), finish(c, 'metal'));
   }
   buildRoute() {
-    const place = (w: number, h: number, d: number, color: number, x: number, z: number, y = h / 2) => {
-      const mesh = new T.Mesh(new T.BoxGeometry(w, h, d), new T.MeshStandardMaterial({color, roughness:0.92, metalness:0.05}));
+    const place = (
+      w: number,
+      h: number,
+      d: number,
+      color: number,
+      x: number,
+      z: number,
+      y = h / 2,
+    ) => {
+      const mesh = new T.Mesh(
+        new T.BoxGeometry(w, h, d),
+        new T.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0.05 }),
+      );
       mesh.position.set(x, y, z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -244,29 +262,62 @@ export class Game {
       const sector = sectorAt(7 - z);
       for (const side of [-1, 1]) {
         place(2, 0.3, 12, 0x454d4d, side * 8, z);
-        place(8, sector === 2 ? 7 : 9 + (Math.abs(z) % 3), 10, [0x354951, 0x4b4540, 0x27353a, 0x344c49][sector], side * 13, z);
-        if (sector !== 2) for (let row = 0; row < 2; row++) {
-          const window = place(0.05, 1.2, 2, 0x8c9e8a, side * 8.96, z, 3 + row * 2.5);
-          (window.material as T.MeshStandardMaterial).emissive.setHex(0x31452f);
-        }
+        place(
+          8,
+          sector === 2 ? 7 : 9 + (Math.abs(z) % 3),
+          10,
+          [0x354951, 0x4b4540, 0x27353a, 0x344c49][sector],
+          side * 13,
+          z,
+        );
+        if (sector !== 2)
+          for (let row = 0; row < 2; row++) {
+            const window = place(
+              0.05,
+              1.2,
+              2,
+              0x8c9e8a,
+              side * 8.96,
+              z,
+              3 + row * 2.5,
+            );
+            (window.material as T.MeshStandardMaterial).emissive.setHex(
+              0x31452f,
+            );
+          }
       }
       place(0.15, 0.02, 4, 0xbcb084, 0, z, 0.025);
       if (sector === 2) place(19, 0.5, 12, 0x26353a, 0, z, 7);
     }
-    for (const b of BARRIERS) this.cover.push(place(b.width, 1.1, b.depth, 0x806442, b.x, b.z));
+    for (const b of BARRIERS)
+      this.cover.push(place(b.width, 1.1, b.depth, 0x806442, b.x, b.z));
     for (const distance of [60, 120, 180, 240]) {
       const z = 7 - distance;
       for (const side of [-1, 1]) place(0.35, 4.5, 0.35, 0xa8c66c, side * 7, z);
       place(14, 0.45, 0.4, 0xa8c66c, 0, z, 4.5);
-      place(13, 0.025, 3, distance === 240 ? 0x658d40 : 0x345c58, 0, z + 1.5, 0.03);
+      place(
+        13,
+        0.025,
+        3,
+        distance === 240 ? 0x658d40 : 0x345c58,
+        0,
+        z + 1.5,
+        0.03,
+      );
     }
   }
   advanceCampaign(dt: number) {
     if (this.hud.state !== 'playing') return;
-    let forward = (this.keys.has('KeyW') || this.keys.has('ArrowUp') ? 1 : 0) - (this.keys.has('KeyS') || this.keys.has('ArrowDown') ? 1 : 0);
-    const sideways = (this.keys.has('KeyD') || this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('KeyA') || this.keys.has('ArrowLeft') ? 1 : 0);
+    let forward =
+      (this.keys.has('KeyW') || this.keys.has('ArrowUp') ? 1 : 0) -
+      (this.keys.has('KeyS') || this.keys.has('ArrowDown') ? 1 : 0);
+    const sideways =
+      (this.keys.has('KeyD') || this.keys.has('ArrowRight') ? 1 : 0) -
+      (this.keys.has('KeyA') || this.keys.has('ArrowLeft') ? 1 : 0);
     if (!forward && this.hud.autoMove) forward = 1;
-    const speed = (this.keys.has('ShiftLeft') ? 5 : 3.4) * dt / Math.max(1, Math.hypot(forward, sideways));
+    const speed =
+      ((this.keys.has('ShiftLeft') ? 5 : 3.4) * dt) /
+      Math.max(1, Math.hypot(forward, sideways));
     const p = this.camera.position;
     const x = p.x + sideways * speed;
     const z = Math.max(7 - ROUTE_LENGTH, Math.min(7, p.z - forward * speed));
@@ -284,10 +335,17 @@ export class Game {
       }
     }
     const atExit = distance >= ROUTE_LENGTH - 3;
-    const threatened = this.enemies.some(e => e.group.position.distanceTo(p) < 6);
-    this.extraction = atExit && !threatened ? Math.min(8, this.extraction + dt) : 0;
+    const threatened = this.enemies.some(
+      (e) => e.group.position.distanceTo(p) < 6,
+    );
+    this.extraction =
+      atExit && !threatened ? Math.min(8, this.extraction + dt) : 0;
     this.hud.extraction = this.extraction;
-    this.hud.objective = atExit ? (threatened ? '주변 좀비를 제거해 구조 구역 확보' : `구조 대기 · ${Math.ceil(8 - this.extraction)}초`) : `${SECTORS[sector]} · ${Math.ceil((sector + 1) * 60 - distance)}m 앞 ${sector === 3 ? '탈출' : '보급'} 지점`;
+    this.hud.objective = atExit
+      ? threatened
+        ? '주변 좀비를 제거해 구조 구역 확보'
+        : `구조 대기 · ${Math.ceil(8 - this.extraction)}초`
+      : `${SECTORS[sector]} · ${Math.ceil((sector + 1) * 60 - distance)}m 앞 ${sector === 3 ? '탈출' : '보급'} 지점`;
     if (this.extraction >= 8) {
       this.hud.state = 'won';
       this.hud.score += 1000;
@@ -338,6 +396,11 @@ export class Game {
     };
   }
   action(a: string, x = this.aim.x, y = this.aim.y) {
+    if (a === 'hold') {
+      this.keys.clear();
+      if (this.hud.state === 'playing') this.pause();
+      return;
+    }
     if (a === 'start') {
       this.start();
       return;
@@ -437,7 +500,8 @@ export class Game {
       false,
     );
     const coverHit = this.ray.intersectObjects(this.cover || [], false)[0];
-    if (coverHit && hits[0] && coverHit.distance < hits[0].distance) hits.length = 0;
+    if (coverHit && hits[0] && coverHit.distance < hits[0].distance)
+      hits.length = 0;
     let hit = false;
     if (hits[0]) {
       const e = this.enemies.find((v) =>
@@ -452,6 +516,7 @@ export class Game {
             hits[0].point.distanceTo(
               e.headBone.getWorldPosition(new T.Vector3()),
             ) < 0.43);
+        if (e.group) e.group.userData.hitUntil = this.elapsed + 0.16;
         e.hp -= head ? 3 : 1;
         this.hud.hit = head ? 'HEADSHOT +150' : 'HIT';
         if (e.hp <= 0) {
@@ -466,53 +531,23 @@ export class Game {
     this.emit();
   }
   spawnEnemy() {
-    const group = new T.Group(),
+    const group = sentinel(),
       parts: T.Mesh[] = [];
-    const add = (
-      w: number,
-      h: number,
-      d: number,
-      c: number,
-      x: number,
-      y: number,
-      z = 0,
-    ) => {
-      const m = new T.Mesh(
-        organic(w, h, d),
-        finish(c, c === 0xc4d796 ? 'skin' : 'fabric'),
-      );
-      m.position.set(x, y, z);
-      m.userData.head = y > 1.6;
-      group.add(m);
-      parts.push(m);
-      return m;
-    };
-    const skin = 0xc4d796,
-      cloth = 0xc0824b;
-    add(0.65, 0.78, 0.35, cloth, 0, 1.1);
-    const head = add(0.4, 0.46, 0.39, skin, 0, 1.74);
-    add(0.2, 0.62, 0.23, skin, -0.44, 1.18, 0.27).rotation.x = -0.9;
-    add(0.2, 0.62, 0.23, skin, 0.44, 1.18, 0.27).rotation.x = -0.9;
-    add(0.23, 0.75, 0.25, 0x817b64, -0.19, 0.39);
-    add(0.23, 0.75, 0.25, 0x817b64, 0.19, 0.39);
-    for (const x of [-0.1, 0.1]) {
-      const eye = add(0.06, 0.045, 0.025, 0xe8f4ad, x, 1.79, 0.21);
-      (eye.material as T.MeshStandardMaterial).emissive.setHex(0xff704d);
-    }
-    add(0.15, 0.16, 0.12, skin, 0, 1.69, 0.18);
-    add(0.09, 0.1, 0.085, skin, 0, 1.78, 0.2);
-    add(0.2, 0.035, 0.03, 0x514b3b, 0, 1.65, 0.2);
-    for (const x of [-0.23, 0.23]) add(0.095, 0.14, 0.1, skin, x, 1.76);
-    for (const x of [-0.44, 0.44]) add(0.22, 0.2, 0.19, skin, x, 0.99, 0.52);
-    for (const part of parts) {
-      const material = part.material as T.MeshStandardMaterial;
-      material.emissive.setHex(0x614926);
-      material.emissiveIntensity = 0.3;
-      material.metalness = 0;
-      material.roughness = 0.9;
-    }
-    group.position.set((Math.random() - 0.5) * 12, 0, Math.max(-248, this.camera.position.z - 20 - Math.random() * 14));
-    for (const b of BARRIERS) if (Math.abs(group.position.x - b.x) < 2 && Math.abs(group.position.z - b.z) < 2) group.position.x = 0;
+    group.traverse((o) => {
+      if (o instanceof T.Mesh) parts.push(o);
+    });
+    const head = group.getObjectByName('Yeti_Head') as T.Mesh;
+    group.position.set(
+      (Math.random() - 0.5) * 12,
+      0,
+      Math.max(-248, this.camera.position.z - 20 - Math.random() * 14),
+    );
+    for (const b of BARRIERS)
+      if (
+        Math.abs(group.position.x - b.x) < 2 &&
+        Math.abs(group.position.z - b.z) < 2
+      )
+        group.position.x = 0;
     this.scene.add(group);
     const enemy: Enemy = {
       group,
@@ -523,7 +558,11 @@ export class Game {
       phase: Math.random() * 7,
     };
     this.enemies.push(enemy);
-    void this.upgradeEnemy(enemy);
+    enemy.headBone = head;
+    enemy.gait = ['Yeti_LeftLeg', 'Yeti_RightLeg'].map((name) =>
+      group.getObjectByName(name)!,
+    );
+    enemy.mixer = new T.AnimationMixer(group);
   }
   async upgradeEnemy(e: Enemy) {
     try {
@@ -602,7 +641,11 @@ export class Game {
       this.advanceReload(dt);
       this.advanceCampaign(dt);
       this.spawn -= dt;
-      if (this.hud.state === 'playing' && this.enemies.length < 12 && this.spawn <= 0) {
+      if (
+        this.hud.state === 'playing' &&
+        this.enemies.length < 12 &&
+        this.spawn <= 0
+      ) {
         this.spawnEnemy();
         this.spawn = Math.max(1.8, 3.7 - this.hud.wave * 0.35);
       }
@@ -615,20 +658,43 @@ export class Game {
         const step = Math.min(e.speed * dt, Math.max(0, distance - 1.1));
         const nextX = e.group.position.x + direction.x * step;
         const nextZ = e.group.position.z + direction.z * step;
-        const blocked = BARRIERS.some(b => Math.abs(nextX - b.x) < b.width / 2 + 0.35 && Math.abs(nextZ - b.z) < b.depth / 2 + 0.35);
-        if (blocked) e.group.position.x += (e.group.position.x > 0 ? -1 : 1) * e.speed * dt;
-        else { e.group.position.x = nextX; e.group.position.z = nextZ; }
+        const blocked = BARRIERS.some(
+          (b) =>
+            Math.abs(nextX - b.x) < b.width / 2 + 0.35 &&
+            Math.abs(nextZ - b.z) < b.depth / 2 + 0.35,
+        );
+        if (blocked)
+          e.group.position.x +=
+            (e.group.position.x > 0 ? -1 : 1) * e.speed * dt;
+        else {
+          e.group.position.x = nextX;
+          e.group.position.z = nextZ;
+        }
         e.group.rotation.y = Math.atan2(direction.x, direction.z);
         e.group.rotation.z = Math.sin(t * 0.003 + e.phase) * 0.04;
         e.group.position.y = Math.abs(Math.sin(t * 0.004 + e.phase)) * 0.045;
         if (e.mixer) {
           e.mixer.update(dt);
-          e.gait?.forEach((bone, i) =>
-            bone.rotateZ(Math.sin(t * 0.005 + e.phase + i * Math.PI) * 0.22),
+          e.gait?.forEach(
+            (bone, i) =>
+              (bone.rotation.x =
+                Math.sin(t * 0.005 + e.phase + i * Math.PI) * 0.34),
           );
         } else {
           e.parts[4].rotation.x = Math.sin(t * 0.005 + e.phase) * 0.25;
           e.parts[5].rotation.x = -Math.sin(t * 0.005 + e.phase) * 0.25;
+        }
+        for (const part of e.parts) {
+          const mat = part.material as T.MeshStandardMaterial;
+          if (part.name === 'visor' || part.name === 'reactor') {
+            mat.emissive.setHex(distance < 3 ? 0xef6453 : 0xefb85c);
+            mat.emissiveIntensity =
+              1.4 + Math.sin(this.elapsed * (distance < 3 ? 12 : 3)) * 0.5;
+          } else {
+            mat.emissive.setHex(0xef6453);
+            mat.emissiveIntensity =
+              this.elapsed < (e.group.userData.hitUntil ?? 0) ? 0.65 : 0;
+          }
         }
         e.attack = Math.max(0, (e.attack || 0) - dt);
         if (distance < 1.6 && !e.attack) {
@@ -641,7 +707,10 @@ export class Game {
         }
       }
       this.emitTime += dt;
-      if (this.emitTime >= 0.1) { this.emitTime = 0; this.emit(); }
+      if (this.emitTime >= 0.1) {
+        this.emitTime = 0;
+        this.emit();
+      }
     }
     for (const c of this.casings) {
       c.life -= dt;

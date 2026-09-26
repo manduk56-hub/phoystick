@@ -1,4 +1,8 @@
 'use client';
+import { useResumeGame } from '@/lib/use-resume-game';
+import { isGameShortcut, normalizedPoint } from '@/lib/game-input';
+import { useGameInterruption } from '@/lib/use-game-interruption';
+import { connectGame, savedSession } from '@/lib/game-session';
 import { useEffect, useRef, useState } from 'react';
 import {
   Crosshair,
@@ -29,7 +33,7 @@ import {
   validCalibration,
   type Angle,
 } from '@/lib/aim';
-import { api, Link, type Packet } from '@/lib/link';
+import { Link, type Packet } from '@/lib/link';
 import * as T from 'three';
 import { rounded, finish, organic } from '@/lib/surface';
 import { RELOAD_NAMES, reloadPose } from '@/lib/reload-motion';
@@ -193,8 +197,9 @@ export default function Home() {
   useEffect(() => {
     const p = new URLSearchParams(location.search);
     setRole(
-      p.get('role') === 'phone' ||
+      (p.get('role') || savedSession()?.role) === 'phone' ||
         (!p.has('role') &&
+          !savedSession() &&
           /Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
         ? 'phone'
         : 'host',
@@ -218,7 +223,7 @@ export default function Home() {
           onClick={() => setRole(role === 'host' ? 'phone' : 'host')}
         >
           {role === 'host' ? <Smartphone size={16} /> : <Monitor size={16} />}{' '}
-          {role === 'host' ? '폰 컨트롤러' : 'PC 게임 화면'}
+          {role === 'host' ? '폰 컨트롤러' : '직접 플레이'}
         </button>
       </header>
       {ready && (role === 'host' ? <Host /> : <Controller />)}
@@ -302,8 +307,20 @@ function Host() {
       }
     };
     const key = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft'].includes(e.code)) {
+      if (!isGameShortcut(e)) return;
+      if (
+        [
+          'KeyW',
+          'KeyA',
+          'KeyS',
+          'KeyD',
+          'ArrowUp',
+          'ArrowDown',
+          'ArrowLeft',
+          'ArrowRight',
+          'ShiftLeft',
+        ].includes(e.code)
+      ) {
         e.preventDefault();
         g.keys.add(e.code);
       }
@@ -318,7 +335,10 @@ function Host() {
     };
     window.addEventListener('keydown', key);
     const keyup = (e: KeyboardEvent) => g.keys.delete(e.code);
-    const blur = () => { g.keys.clear(); if (g.hud.state === 'playing') g.pause(); };
+    const blur = () => {
+      g.keys.clear();
+      if (g.hud.state === 'playing') g.pause();
+    };
     window.addEventListener('keyup', keyup);
     window.addEventListener('blur', blur);
     const timer = setInterval(() => {
@@ -369,11 +389,11 @@ function Host() {
       lifecycle.abort();
     };
   }, []);
-  async function create() {
+  async function create(fresh = false) {
     setBusy(true);
     setError('');
     try {
-      const r = await api('create');
+      const r = await connectGame('host', 'shooting', '', fresh);
       link.current?.close();
       setRoom(r);
       lastEvent.current = 0;
@@ -429,6 +449,12 @@ function Host() {
     game.current?.setAim(x, y);
     position(x, y);
   }
+  useResumeGame('host', create);
+  useGameInterruption(() => {
+    game.current?.keys.clear();
+    if (game.current?.hud.state === 'playing') game.current.pause();
+  });
+
   return (
     <>
       <div className="topline">
@@ -452,10 +478,13 @@ function Host() {
           onPointerMove={mouse}
           onPointerDown={(e) => {
             if (
+              e.button === 0 &&
               mode === 'mouse' &&
               (e.target === canvas.current || e.target === e.currentTarget)
-            )
+            ) {
+              mouse(e);
               game.current?.action('fire');
+            }
           }}
         >
           <canvas ref={canvas} className="game-canvas" />
@@ -525,11 +554,26 @@ function Host() {
             </div>
           </div>
           <div className="campaign-hud">
-            <strong>{hud.objective || '격리 지구에서 구조 지점까지 이동하세요'}</strong>
+            <strong>
+              {hud.objective || '격리 지구에서 구조 지점까지 이동하세요'}
+            </strong>
             <span>{Math.floor(hud.distance || 0)} / 240 m</span>
-            <progress aria-label="탈출 경로 진행률" value={hud.distance || 0} max={240} />
-            <small>WASD / 방향키 이동 · Shift 달리기 · F 자동 전진 · R 장전 3단계</small>
-            {hud.state === 'playing' && <button className="quiet" onClick={() => game.current?.action('advance')}>{hud.autoMove ? '■ 전진 멈추기' : '↑ 자동 전진'}</button>}
+            <progress
+              aria-label="탈출 경로 진행률"
+              value={hud.distance || 0}
+              max={240}
+            />
+            <small>
+              WASD / 방향키 이동 · Shift 달리기 · F 자동 전진 · R 장전 3단계
+            </small>
+            {hud.state === 'playing' && (
+              <button
+                className="quiet"
+                onClick={() => game.current?.action('advance')}
+              >
+                {hud.autoMove ? '■ 전진 멈추기' : '↑ 자동 전진'}
+              </button>
+            )}
           </div>
           <div ref={cross} className="crosshair">
             <Crosshair size={38} />
@@ -537,18 +581,22 @@ function Host() {
           {hud.state !== 'playing' && !calibrating && (
             <div className="overlay">
               <span className="eyebrow">
-                {hud.state === 'won' ? 'EXTRACTION COMPLETE' : hud.state === 'over'
-                  ? 'SIGNAL LOST'
-                  : hud.state === 'paused'
-                    ? 'HOLD POSITION'
-                    : 'THEY ARE GETTING CLOSER'}
+                {hud.state === 'won'
+                  ? 'EXTRACTION COMPLETE'
+                  : hud.state === 'over'
+                    ? 'SIGNAL LOST'
+                    : hud.state === 'paused'
+                      ? 'HOLD POSITION'
+                      : 'THEY ARE GETTING CLOSER'}
               </span>
               <h2>
-                {hud.state === 'won' ? '탈출에 성공했다.' : hud.state === 'over'
-                  ? '구조 지점에 도달하지 못했다.'
-                  : hud.state === 'paused'
-                    ? '잠시 숨을 고르세요.'
-                    : '좀비를 뚫고, 탈출하라.'}
+                {hud.state === 'won'
+                  ? '탈출에 성공했다.'
+                  : hud.state === 'over'
+                    ? '구조 지점에 도달하지 못했다.'
+                    : hud.state === 'paused'
+                      ? '잠시 숨을 고르세요.'
+                      : '좀비를 뚫고, 탈출하라.'}
               </h2>
               <p>
                 {hud.state === 'won' || hud.state === 'over'
@@ -654,6 +702,24 @@ function Host() {
             </div>
           )}
           {hud.state === 'playing' && (
+            <div className="shoot-touch-actions">
+              <button
+                className="quiet"
+                disabled={!!hud.reloadMotion}
+                onClick={() => game.current?.action('reload')}
+              >
+                <RotateCcw size={18} />{' '}
+                {hud.reloadMotion ? '장전 중…' : reloadLabels[hud.reload]}
+              </button>
+              <button
+                className="quiet"
+                onClick={() => game.current?.action('advance')}
+              >
+                {hud.autoMove ? '전진 멈추기' : '자동 전진'}
+              </button>
+            </div>
+          )}
+          {hud.state === 'playing' && (
             <button
               className="pause quiet"
               aria-label="일시정지"
@@ -693,12 +759,20 @@ function Host() {
                   <img src={qr} alt="폰 연결 QR 코드" width={88} height={88} />
                 )}
               </div>
-              <button className="text-button" disabled={busy} onClick={create}>
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={() => void create(true)}
+              >
                 <RotateCcw size={14} /> 새 연결 코드
               </button>
             </>
           ) : (
-            <button className="pair-button" disabled={busy} onClick={create}>
+            <button
+              className="pair-button"
+              disabled={busy}
+              onClick={() => void create(true)}
+            >
               <Link2 size={17} />
               {busy ? '연결 준비 중…' : '폰 연결 코드 만들기'}
             </button>
@@ -769,7 +843,8 @@ function Host() {
       <div className="mission-note">
         <b>MISSION BRIEF</b>
         <span>
-          4개 구역을 통과해 탈출하세요. 보급 지점에서 체력 +25. 구조 지점 주변을 확보하고 8초간 대기하세요.
+          4개 구역을 통과해 탈출하세요. 보급 지점에서 체력 +25. 구조 지점 주변을
+          확보하고 8초간 대기하세요.
         </span>
         <span>무한 예비 탄창 / 수동 3단계 장전</span>
       </div>
@@ -836,10 +911,13 @@ function Controller() {
     setBusy(true);
     setError('');
     try {
-      const r = await api('join', { code });
+      const r = await connectGame('phone', 'shooting', code);
+      link.current?.close();
       const l = (link.current = new Link(r, 'phone'));
       l.onConnection = setStatus;
-      l.onStatus = (v: HUD) => setHud(v);
+      l.onStatus = (v: HUD) => {
+        if (v.state) setHud(v);
+      };
       setConnected(true);
       setStatus('PC와 연결 중');
     } catch (e) {
@@ -848,6 +926,10 @@ function Controller() {
       setBusy(false);
     }
   }
+  useResumeGame('phone', join);
+  useGameInterruption(() => {
+    if (connected) sendAction('hold');
+  });
   async function enable() {
     setError('');
     try {
@@ -1063,16 +1145,20 @@ function Controller() {
                 onPointerMove={(e) => {
                   if (!sensor && e.buttons) {
                     const r = e.currentTarget.getBoundingClientRect();
-                    data.current.x = (e.clientX - r.left) / r.width;
-                    data.current.y = (e.clientY - r.top) / r.height;
+                    Object.assign(
+                      data.current,
+                      normalizedPoint(e.clientX, e.clientY, r),
+                    );
                   }
                 }}
                 onPointerDown={(e) => {
                   if (!sensor) {
                     e.currentTarget.setPointerCapture(e.pointerId);
                     const r = e.currentTarget.getBoundingClientRect();
-                    data.current.x = (e.clientX - r.left) / r.width;
-                    data.current.y = (e.clientY - r.top) / r.height;
+                    Object.assign(
+                      data.current,
+                      normalizedPoint(e.clientX, e.clientY, r),
+                    );
                   }
                 }}
               >
@@ -1112,13 +1198,27 @@ function Controller() {
                 </button>
                 <button
                   className="fire-button"
+                  disabled={
+                    hud.state !== 'playing' ||
+                    !hud.chamber ||
+                    !!hud.reload ||
+                    !!hud.reloadMotion
+                  }
                   onPointerDown={(e) => {
+                    if (e.button !== 0) return;
                     e.preventDefault();
                     sendAction('fire');
                   }}
+                  onClick={(e) => {
+                    if (e.detail === 0) sendAction('fire');
+                  }}
                 >
                   <Crosshair size={26} />
-                  발사
+                  {hud.state !== 'playing'
+                    ? '전투 대기'
+                    : !hud.chamber || hud.reload
+                      ? '장전 필요'
+                      : '발사'}
                 </button>
               </div>
               <div className="controller-tools">
@@ -1137,7 +1237,9 @@ function Controller() {
                   className="quiet"
                   onClick={() =>
                     sendAction(
-                      hud.state === 'ready' || hud.state === 'over' || hud.state === 'won'
+                      hud.state === 'ready' ||
+                        hud.state === 'over' ||
+                        hud.state === 'won'
                         ? 'start'
                         : 'pause',
                     )
@@ -1150,8 +1252,13 @@ function Controller() {
                       : '전투 시작'}
                 </button>
               </div>
-              <button className="quiet" disabled={hud.state !== 'playing'} onClick={() => sendAction('advance')}>
-                {hud.autoMove ? '■ 전진 멈추기' : '↑ 자동 전진'} · {Math.floor(hud.distance || 0)} / 240m
+              <button
+                className="quiet"
+                disabled={hud.state !== 'playing'}
+                onClick={() => sendAction('advance')}
+              >
+                {hud.autoMove ? '■ 전진 멈추기' : '↑ 자동 전진'} ·{' '}
+                {Math.floor(hud.distance || 0)} / 240m
               </button>
               {sensor && (
                 <label className="sensitivity">

@@ -776,16 +776,22 @@
   }
 }
 .race-active .race-dashboard {
-  top: 150px;
-  bottom: auto;
+  top: auto;
+  bottom: 55px;
   left: 4vw;
-  right: auto;
-  display: block;
-  width: 180px;
-  opacity: 0.85;
+  right: 4vw;
+  display: flex;
+  width: auto;
+  opacity: 1;
+}
+.race-active .race-progress {
+  top: 96px;
+}
+.race-active .race-progress span {
+  display: none;
 }
 .race-active .race-speed {
-  display: none;
+  display: block;
 }
 .race-active .race-wheel-mini {
   display: none;
@@ -798,4 +804,405 @@
   padding: 6px 10px;
   background: #0a1523aa;
   border-radius: 4px;
+}
+.race-classification {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  min-width: 225px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  background: #10161ee6;
+  border-left: 3px solid #ef3d46;
+}
+.race-classification li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #ffffff14;
+  font-size: 13px;
+}
+.race-classification li b {
+  font: 14px monospace;
+  width: 18px;
+}
+.race-classification li span {
+  font-size: 13px;
+  letter-spacing: 0;
+  flex: 1;
+}
+.race-classification li small {
+  font: 12px monospace;
+  color: #bfc9d4;
+}
+.race-classification .is-player {
+  background: #ed3646;
+  color: white;
+}
+.race-classification .is-player small {
+  color: white;
+}
+.race-active .race-timing {
+  left: 3vw;
+  right: auto;
+  top: 130px;
+  text-align: left;
+  gap: 4px;
+}
+.race-timing > b small {
+  font-size: 16px;
+  color: #b5bdc9;
+}
+.race-lap-timing {
+  position: absolute;
+  right: 3vw;
+  top: 125px;
+  background: #10161ee6;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  min-width: 235px;
+  border-top: 3px solid #ef3d46;
+  font-size: 14px;
+}
+.race-lap-timing span {
+  display: flex;
+  justify-content: space-between;
+  gap: 25px;
+  color: #c5ccd5;
+}
+.race-lap-timing b {
+  color: white;
+  font-family: monospace;
+  font-size: 17px;
+}
+.race-lap-timing em {
+  color: #ffce66;
+  font-style: normal;
+  font-size: 12px;
+}
+.race-circuit-map {
+  position: absolute;
+  right: 3vw;
+  top: 310px;
+  width: 190px;
+  background: #10161ed9;
+  padding: 14px;
+}
+.race-circuit-map svg {
+  width: 100%;
+  height: 165px;
+  display: block;
+}
+.race-circuit-map span,
+.race-circuit-map small {
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.race-gear {
+  display: grid;
+  text-align: center;
+  border-left: 3px solid #ed3646;
+  padding: 0 15px;
+}
+.race-gear b {
+  font: 64px monospace;
+  line-height: 1;
+}
+.race-gear span,
+.race-gear small {
+  font-size: 12px;
+  color: #c5ccd5;
+}
+.race-rev {
+  position: absolute;
+  bottom: 174px;
+  left: 4vw;
+  width: 290px;
+  background: #ffffff30;
+  height: 5px;
+}
+.race-rev i {
+  display: block;
+  height: 100%;
+  background: #ef3d46;
+}
+.race-rev span {
+  font: 12px monospace;
+  display: block;
+  margin-top: 8px;
+}
+.race-start-lights {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  margin-bottom: 22px;
+}
+.race-start-lights i {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #1a1b22;
+  border: 3px solid #38404b;
+}
+.race-start-lights .lit {
+  background: #f43143;
+  box-shadow: 0 0 40px #f4314380;
+  border-color: #ff6b72;
+}
+.race-app .race-primary {
+  background: #ed3646;
+  color: white;
+}
+.race-app .race-primary:hover {
+  background: #fa5361;
+}
+.race-intro em {
+  color: #ff5363;
+}
+.race-intro h1 {
+  font-size: clamp(36px, 4.5vw, 64px);
+}
+.race-intro p {
+  font-size: 16px;
+}
+@media (max-width: 800px) {
+  .race-active .race-timing {
+    top: 110px;
+    left: 15px;
+  }
+  .race-classification {
+    min-width: 175px;
+  }
+  .race-classification li {
+    padding: 4px 8px;
+    gap: 8px;
+  }
+  .race-lap-timing {
+    top: 110px;
+    right: 15px;
+    min-width: 185px;
+    padding: 10px;
+    font-size: 12px;
+  }
+  .race-lap-timing b {
+    font-size: 14px;
+  }
+  .race-circuit-map {
+    width: 135px;
+    bottom: 175px;
+    right: 15px;
+    padding: 8px;
+  }
+  .race-circuit-map svg {
+    height: 115px;
+  }
+  .race-rev {
+    bottom: 155px;
+    width: 220px;
+  }
+  .race-gear b {
+    font-size: 40px;
+  }
+  .race-dashboard {
+    gap: 12px;
+  }
+}
+@media (max-height: 600px) {
+  .race-circuit-map {
+    display: none;
+  }
+  .race-classification li {
+    padding: 3px 8px;
+  }
+  .race-active .race-timing {
+    top: 90px;
+  }
+  .race-lap-timing {
+    top: 95px;
+  }
+  .race-rev {
+    bottom: 145px;
+  }
+}
+
+.drive-mode {
+  display: flex;
+  gap: 8px;
+}
+.drive-mode button {
+  flex: 1;
+  min-height: 44px;
+}
+.drive-mode button[aria-pressed='true'] {
+  border-color: #ff7180;
+  background: #ed364630;
+  color: #fff;
+}
+.drive-touch-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.race-app .drive-touch-controls button {
+  min-height: 80px;
+  font-size: 21px;
+  border-radius: 14px;
+  background: #203447;
+  border: 1px solid #8ba4b566;
+}
+.race-app .drive-touch-controls .drive-throttle {
+  background: #ed3646;
+  color: white;
+}
+.race-app .drive-touch-controls .drive-brake {
+  background: #e7eaf0;
+  color: #15222d;
+}
+.race-local-touch {
+  display: none;
+}
+.race-modal {
+  max-height: calc(100dvh - 110px);
+  overscroll-behavior: contain;
+}
+.race-phone-controls p,
+.race-modal p {
+  font-size: 14px;
+}
+.race-phone-grid > * {
+  min-width: 0;
+}
+@media (pointer: coarse) {
+  .race-local-touch {
+    display: block;
+    position: absolute;
+    bottom: max(76px, calc(env(safe-area-inset-bottom) + 70px));
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
+    z-index: 4;
+  }
+  .race-local-touch .drive-touch-controls {
+    grid-template-columns: 64px 64px 1fr 80px;
+    gap: 10px;
+  }
+  .race-local-touch .drive-touch-controls button {
+    min-height: 62px;
+  }
+  .race-active .race-dashboard {
+    bottom: 160px;
+  }
+  .race-active .race-rev {
+    display: none;
+  }
+  .race-active .race-key-hint {
+    display: none;
+  }
+}
+@media (max-width: 620px) {
+  .race-nav {
+    gap: 10px;
+  }
+  .race-nav button {
+    margin-left: 0;
+  }
+  .race-phone-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding-top: 18px;
+  }
+  .race-wheel-panel .race-wheel {
+    width: 140px;
+    height: 140px;
+    transform-origin: center;
+  }
+  .race-wheel-panel .race-wheel::before,
+  .race-wheel-panel .race-wheel::after {
+    width: 45px;
+    top: 45px;
+  }
+  .race-wheel-panel .race-wheel i {
+    left: 45px;
+  }
+  .race-phone-controls h2 {
+    font-size: 24px;
+    margin: 16px 0 8px;
+  }
+  .race-controller .drive-touch-controls {
+    position: sticky;
+    bottom: max(76px, calc(env(safe-area-inset-bottom) + 66px));
+    z-index: 5;
+    padding: 10px;
+    margin: 0 -6px;
+    background: #14222ff5;
+    border-radius: 18px;
+  }
+  .race-controller .drive-touch-controls button {
+    min-height: 72px;
+    padding: 8px;
+  }
+  .race-active .race-classification {
+    display: none;
+  }
+  .race-active .race-lap-timing {
+    top: 150px;
+    left: 15px;
+    right: auto;
+    min-width: 160px;
+  }
+  .race-active .race-timing {
+    top: 85px;
+  }
+  .race-active .race-circuit-map {
+    display: none;
+  }
+  .race-top-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5px;
+  }
+  .race-top-actions button {
+    min-height: 44px;
+    padding: 8px;
+  }
+  .race-active .race-dashboard .race-pedals,
+  .race-active .race-wheel-mini {
+    display: none;
+  }
+  .race-modal {
+    width: calc(100% - 24px);
+    padding: 24px 16px;
+  }
+  .race-pair {
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .race-pair strong {
+    font-size: 30px;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .race-phone-grid {
+    gap: 18px;
+    padding: 12px 0;
+  }
+  .race-phone-controls p {
+    margin: 8px 0;
+  }
+  .race-phone-guide {
+    flex-wrap: wrap;
+  }
+  .race-controller .drive-touch-controls button {
+    min-height: 58px;
+  }
+}
+.race-app .drive-touch-controls .hold-button {
+  touch-action: none;
+}
+.drive-mode {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
 }

@@ -119,3 +119,13 @@ test('paused state ignores fire and reload; pause resumes', () => {
   g.pause();
   assert.equal(g.hud.state, 'playing');
 });
+
+test('hold is idempotent and releases movement without resuming a paused game', () => {
+  const g = game();
+  g.keys = new Set(['KeyW']);
+  g.action('hold');
+  assert.equal(g.hud.state, 'paused');
+  assert.equal(g.keys.size, 0);
+  g.action('hold');
+  assert.equal(g.hud.state, 'paused');
+});

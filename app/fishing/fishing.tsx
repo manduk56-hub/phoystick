@@ -1,4 +1,9 @@
 'use client';
+import { useResumeGame } from '@/lib/use-resume-game';
+import HoldButton from '@/components/hold-button';
+import { isGameShortcut } from '@/lib/game-input';
+import { useGameInterruption } from '@/lib/use-game-interruption';
+import { connectGame, savedSession } from '@/lib/game-session';
 import { useEffect, useRef, useState } from 'react';
 import {
   Home,
@@ -15,13 +20,15 @@ import {
   Link2,
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import Tackle, { FishingRigControls } from './tackle';
+import { spots, rigs, baits, equipment, leaders } from '@/lib/fishing-model';
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
 import { Progress } from '@/components/ui/progress';
-import { api, Link, type Packet } from '@/lib/link';
+import { Link, type Packet } from '@/lib/link';
 import { FishingScene } from '@/lib/fishing-scene';
 import {
   FishingModel,
@@ -72,6 +79,12 @@ function Reel({
     last = useRef(0),
     accum = useRef(0);
   const [rotation, setRotation] = useState(0);
+  useEffect(() => {
+    if (disabled) {
+      dragging.current = false;
+      accum.current = 0;
+    }
+  }, [disabled]);
   const angle = (e: React.PointerEvent) => {
     const r = e.currentTarget.getBoundingClientRect();
     return Math.atan2(
@@ -86,6 +99,7 @@ function Reel({
         disabled={disabled}
         aria-label="시계 방향으로 돌려 줄 감기. 키보드에서는 방향키 또는 Enter"
         onPointerDown={(e) => {
+          if (e.button !== 0 || dragging.current) return;
           e.preventDefault();
           dragging.current = true;
           last.current = angle(e);
@@ -93,6 +107,17 @@ function Reel({
         }}
         onPointerMove={(e) => {
           if (!dragging.current || disabled) return;
+          const bounds = e.currentTarget.getBoundingClientRect();
+          if (
+            Math.hypot(
+              e.clientX - bounds.left - bounds.width / 2,
+              e.clientY - bounds.top - bounds.height / 2,
+            ) <
+            bounds.width * 0.16
+          ) {
+            last.current = angle(e);
+            return;
+          }
           const a = angle(e),
             delta = reelDelta(last.current, a);
           last.current = a;
@@ -113,6 +138,10 @@ function Reel({
           }
         }}
         onPointerCancel={() => {
+          dragging.current = false;
+          accum.current = 0;
+        }}
+        onLostPointerCapture={() => {
           dragging.current = false;
           accum.current = 0;
         }}
@@ -147,8 +176,9 @@ export default function Fishing() {
   useEffect(() => {
     const p = new URLSearchParams(location.search);
     setRole(
-      p.get('role') === 'phone' ||
+      (p.get('role') || savedSession()?.role) === 'phone' ||
         (!p.has('role') &&
+          !savedSession() &&
           /Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
         ? 'phone'
         : 'host',
@@ -166,7 +196,7 @@ export default function Fishing() {
           onClick={() => setRole((v) => (v === 'host' ? 'phone' : 'host'))}
         >
           {role === 'host' ? <Smartphone size={16} /> : <Monitor size={16} />}{' '}
-          {role === 'host' ? '폰 컨트롤러' : 'PC 화면'}
+          {role === 'host' ? '폰 컨트롤러' : '직접 플레이'}
         </button>
       </header>
       {ready && (role === 'host' ? <FishingHost /> : <FishingController />)}
@@ -179,7 +209,6 @@ function FishingHost() {
     container = useRef<HTMLElement>(null),
     link = useRef<Link | null>(null),
     lastEvent = useRef(0),
-    stateRef = useRef<FishingState>(initial),
     remote = useRef(false);
   const [state, setState] = useState<FishingState>(initial),
     [room, setRoom] = useState<{ code: string; token: string } | null>(null),
@@ -187,38 +216,61 @@ function FishingHost() {
     [connection, setConnection] = useState('폰 연결 대기'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [setup, setSetup] = useState(true),
-    [active, setActive] = useState(false);
-  stateRef.current = state;
+    [setup, setSetup] = useState(false),
+    [notebook, setNotebook] = useState(false),
+    [active, setActive] = useState(true);
   useEffect(() => {
     let s: FishingScene;
     try {
       s = new FishingScene(canvas.current!, setState);
       scene.current = s;
+      try {
+        const saved = localStorage.getItem('stillwater-save-v1');
+        if (saved) s.model.restore(saved);
+      } catch {
+        /* Storage can be unavailable. */
+      }
     } catch {
       setError('3D 화면을 열지 못했습니다. 다른 브라우저로 열어 주세요.');
       return;
     }
     const key = (e: KeyboardEvent) => {
-      if (
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(
-          (e.target as HTMLElement).tagName,
-        )
-      )
-        return;
+      if (!isGameShortcut(e)) return;
       if (e.code === 'Space') {
+        if ((e.target as HTMLElement).closest('button') || e.repeat) return;
         e.preventDefault();
         if (['ready', 'caught', 'escaped'].includes(s.model.state.phase)) {
           s.action('cast', 0.65);
           setActive(true);
           setSetup(false);
+          setNotebook(false);
         } else s.action('hook');
       }
-      if (e.code === 'KeyR' && !e.repeat) s.action('reel', 0.35);
-      if (e.code === 'Escape') s.action('pause');
+      if (e.code === 'KeyR') s.action('reelStart');
+      if (e.code === 'BracketLeft') s.action('drag', s.model.state.drag - 0.05);
+      if (e.code === 'BracketRight')
+        s.action('drag', s.model.state.drag + 0.05);
+      if (e.code === 'KeyQ') s.action('rod', s.model.state.rod + 0.1);
+      if (e.code === 'KeyE') s.action('rod', s.model.state.rod - 0.1);
+      if (e.code === 'Escape' && !e.repeat) s.action('pause');
     };
     window.addEventListener('keydown', key);
+    const releaseReel = () => s.action('reelStop');
+    const keyUp = (e: KeyboardEvent) => {
+      if (e.code === 'KeyR') releaseReel();
+    };
+    window.addEventListener('keyup', keyUp);
+    window.addEventListener('blur', releaseReel);
+    let savedRevision = -1;
     const timer = setInterval(() => {
+      if (s.model.state.revision !== savedRevision) {
+        try {
+          localStorage.setItem('stillwater-save-v1', s.model.save());
+          savedRevision = s.model.state.revision;
+        } catch {
+          /* Continue without device storage. */
+        }
+      }
       link.current?.send({ ...s.model.state, time: Date.now() });
       if (
         remote.current &&
@@ -268,10 +320,17 @@ function FishingHost() {
         ),
       ).catch(() => {});
     return () => {
+      try {
+        localStorage.setItem('stillwater-save-v1', s.model.save());
+      } catch {
+        /* Continue without device storage. */
+      }
       s.dispose();
       link.current?.close();
       clearInterval(timer);
       window.removeEventListener('keydown', key);
+      window.removeEventListener('keyup', keyUp);
+      window.removeEventListener('blur', releaseReel);
       lifecycle.abort();
     };
   }, []);
@@ -282,11 +341,16 @@ function FishingHost() {
     }
     scene.current?.action(a, v);
   }
-  async function create() {
+  useGameInterruption(() => {
+    const s = scene.current;
+    if (s && !['ready', 'caught', 'escaped'].includes(s.model.state.phase))
+      s.action('hold');
+  });
+  async function create(fresh = false) {
     setBusy(true);
     setError('');
     try {
-      const r = await api('create', { game: 'fishing' });
+      const r = await connectGame('host', 'fishing', '', fresh);
       link.current?.close();
       lastEvent.current = 0;
       remote.current = false;
@@ -295,14 +359,28 @@ function FishingHost() {
       l.onConnection = setConnection;
       l.onInput = (p: EventPacket) => {
         remote.current = true;
-        scene.current!.model.state.rod = Math.max(0, Math.min(1, p.y));
+        scene.current!.model.configure('rod', p.y);
         for (const e of p.events || []) {
           if (e.id <= lastEvent.current) continue;
           lastEvent.current = e.id;
-          if (['cast', 'hook', 'reel', 'flick', 'pause'].includes(e.action)) {
+          if (
+            [
+              'cast',
+              'hook',
+              'reel',
+              'flick',
+              'pause',
+              'hold',
+              'drag',
+              'speed',
+              'rod',
+              'recall',
+            ].includes(e.action)
+          ) {
             if (e.action === 'cast') {
               setSetup(false);
               setActive(true);
+              setNotebook(false);
             }
             scene.current?.action(
               e.action,
@@ -326,17 +404,28 @@ function FishingHost() {
       setBusy(false);
     }
   }
+  useResumeGame('host', create);
+
   return (
     <section
       ref={container}
-      className={'fish-scene ' + (active ? 'fishing-active' : '')}
+      className={
+        'fish-scene ' +
+        (active ? 'fishing-active ' : '') +
+        (state.paused ? 'is-paused' : '')
+      }
     >
       <canvas ref={canvas} className="fish-canvas" />
-      <div className="fish-shade" />
+      <div
+        className="fish-shade"
+        style={{
+          backgroundColor: `rgba(5, 18, 35, ${state.hour < 5 || state.hour > 20 ? 0.62 : state.weather === 2 ? 0.28 : state.weather === 1 ? 0.15 : 0})`,
+        }}
+      />
       <div className="fish-top">
         <div>
-          <span>LAKE 01</span>
-          <b>아침의 호수</b>
+          <span>STILLWATER / LAKE 01</span>
+          <b>{spots[state.spot].name}</b>
         </div>
         <div className="catch-count">
           <Fish size={18} />
@@ -344,6 +433,21 @@ function FishingHost() {
           <span>마리 · {state.totalWeight.toFixed(2)} kg</span>
         </div>
         <div className="fish-top-actions">
+          <button
+            className="quiet"
+            aria-expanded={notebook}
+            onClick={() => {
+              if (
+                !notebook &&
+                ['casting', 'waiting', 'bite', 'fighting'].includes(state.phase)
+              )
+                action('hold');
+              setNotebook((v) => !v);
+              setSetup(false);
+            }}
+          >
+            채비 · 수첩
+          </button>
           <button
             className="quiet"
             onClick={() => {
@@ -362,6 +466,7 @@ function FishingHost() {
               )
                 action('pause');
               setSetup((v) => !v);
+              setNotebook(false);
             }}
           >
             <Smartphone size={17} /> 연결
@@ -376,20 +481,47 @@ function FishingHost() {
           <button
             className="quiet"
             aria-label="전체화면"
-            onClick={() => {
-              if (document.fullscreenElement) void document.exitFullscreen();
-              else
-                void container.current
-                  ?.requestFullscreen?.()
-                  .catch(() =>
-                    setError('브라우저에서 전체화면을 지원하지 않습니다.'),
+            onClick={async () => {
+              try {
+                if (document.fullscreenElement) await document.exitFullscreen();
+                else if (container.current?.requestFullscreen)
+                  await container.current.requestFullscreen();
+                else
+                  setError(
+                    '브라우저에서 전체화면을 지원하지 않습니다. 현재 화면에서 계속 즐길 수 있어요.',
                   );
+              } catch {
+                setError(
+                  '전체화면을 열지 못했습니다. 현재 화면에서 계속 즐길 수 있어요.',
+                );
+              }
             }}
           >
             <Maximize2 size={18} />
           </button>
         </div>
       </div>
+      <div className="fish-weather">
+        <b>
+          {String(Math.floor(state.hour)).padStart(2, '0')}:
+          {String(Math.floor((state.hour % 1) * 60)).padStart(2, '0')}
+        </b>
+        <span>
+          {['맑음', '흐림', '비'][state.weather]} ·{' '}
+          {state.temperature.toFixed(0)}°C
+        </span>
+        <span>바람 {state.wind.toFixed(1)} m/s</span>
+        <span>
+          {spots[state.spot].bottom} · 최대 {spots[state.spot].depth} m
+        </span>
+      </div>
+      {notebook && (
+        <Tackle
+          state={state}
+          action={action}
+          close={() => setNotebook(false)}
+        />
+      )}
       {state.phase === 'ready' && !active && (
         <div className="fish-welcome">
           <span>MOTION FISHING / STILLWATER</span>
@@ -450,12 +582,16 @@ function FishingHost() {
                 )}
               </div>
               <p className="fish-status">{connection}</p>
-              <button className="quiet" disabled={busy} onClick={create}>
+              <button
+                className="quiet"
+                disabled={busy}
+                onClick={() => void create(true)}
+              >
                 새 코드 만들기
               </button>
             </>
           ) : (
-            <button disabled={busy} onClick={create}>
+            <button disabled={busy} onClick={() => void create(true)}>
               <Link2 size={17} />
               {busy ? '코드 생성 중…' : '연결 코드 만들기'}
             </button>
@@ -472,7 +608,11 @@ function FishingHost() {
       {active && (
         <>
           <div
-            className={'fish-phase ' + (state.phase === 'bite' ? 'bite' : '')}
+            className={
+              'fish-phase ' +
+              (notebook ? 'with-notebook ' : '') +
+              (state.phase === 'bite' ? 'bite' : '')
+            }
           >
             <span>
               {state.phase === 'bite'
@@ -485,6 +625,51 @@ function FishingHost() {
             </span>
             <h2>{state.paused ? '잠시 쉬어가세요' : phaseText[state.phase]}</h2>
             <p>{state.message}</p>
+            {state.phase === 'ready' && !state.paused && (
+              <button
+                onClick={() => {
+                  action('cast', 0.65);
+                  setNotebook(false);
+                }}
+              >
+                캐스팅하기 ↗
+              </button>
+            )}
+            {state.phase === 'waiting' && (
+              <div className="bite-observation">
+                {state.rig === 2
+                  ? '루어를 감아 유인하세요'
+                  : state.nibble > 0.1
+                    ? '예신 · 조금 더 기다리세요'
+                    : state.rig === 1
+                      ? '초릿대 관찰 중'
+                      : '찌 관찰 중'}
+                {state.groundbait > 0
+                  ? ` · 밑밥 ${Math.ceil(state.groundbait)}초`
+                  : ''}
+              </div>
+            )}
+            {state.phase === 'caught' && (
+              <div className="catch-details">
+                <strong>
+                  {state.trophy ? '★ TROPHY' : 'CATCH RECORD'} ·{' '}
+                  {state.weight.toFixed(2)} kg
+                </strong>
+                <span>
+                  {state.length} cm · 경험치 +
+                  {Math.round(12 + state.weight * 8)}
+                </span>
+                <button
+                  disabled={
+                    !state.keepnet.some((f) => f.id === state.catches) ||
+                    state.paused
+                  }
+                  onClick={() => action('release')}
+                >
+                  방생 · 경험치 +5
+                </button>
+              </div>
+            )}
             {state.paused && (
               <button
                 onClick={() => {
@@ -501,7 +686,7 @@ function FishingHost() {
               </button>
             )}
           </div>
-          <div className="fish-bottom">
+          <div className={'fish-bottom ' + (notebook ? 'with-notebook' : '')}>
             <div className="fish-distance">
               <span>남은 거리</span>
               <b>
@@ -509,8 +694,33 @@ function FishingHost() {
                 <small> m</small>
               </b>
               <span>캐스팅 {state.castDistance.toFixed(0)} m</span>
+              <span>
+                {rigs[state.rig]} · {baits[state.bait]} ·{' '}
+                {state.rig === 1 ? spots[state.spot].depth : state.depth} m
+              </span>
             </div>
-            {state.phase === 'fighting' && <Meter state={state} />}
+            {state.phase === 'fighting' && (
+              <div className="fight-instruments">
+                <Meter state={state} />
+                <div className="fight-stamina">
+                  <span>물고기 체력 {Math.round(state.stamina * 100)}%</span>
+                  <Progress
+                    value={state.stamina * 100}
+                    aria-label="물고기 체력"
+                  />
+                  <small>
+                    하중 {state.load.toFixed(2)} /{' '}
+                    {(
+                      equipment[state.gear].line *
+                      leaders[state.leader].strength *
+                      (0.6 + state.condition * 0.4)
+                    ).toFixed(1)}{' '}
+                    kg · {state.slipping ? '드랙 풀림' : '드랙 유지'}
+                  </small>
+                </div>
+                <FishingRigControls state={state} action={action} />
+              </div>
+            )}
             <div className="fish-pc-controls">
               {state.phase === 'bite' ? (
                 <button onClick={() => action('hook')}>
@@ -518,17 +728,42 @@ function FishingHost() {
                 </button>
               ) : (
                 <button
-                  disabled={state.phase !== 'fighting' || state.paused}
-                  onClick={() => action('reel', 0.35)}
+                  disabled={
+                    (state.phase !== 'fighting' &&
+                      !(state.phase === 'waiting' && state.rig === 2)) ||
+                    state.paused
+                  }
+                  onPointerDown={(e) => {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    action('reelStart');
+                  }}
+                  onPointerUp={() => action('reelStop')}
+                  onPointerCancel={() => action('reelStop')}
+                  onLostPointerCapture={() => action('reelStop')}
+                  onClick={(e) => {
+                    if (e.detail === 0) action('reel', 0.35);
+                  }}
                   onWheel={(e) => {
-                    if (state.phase === 'fighting')
+                    if (
+                      state.phase === 'fighting' ||
+                      (state.phase === 'waiting' && state.rig === 2)
+                    )
                       action('reel', Math.min(0.4, Math.abs(e.deltaY) / 300));
                   }}
                 >
-                  줄 감기 <RotateCcw size={18} />
+                  누르고 줄 감기 <RotateCcw size={18} />
                 </button>
               )}
-              <small>SPACE 캐스팅·챔질 / R·휠 줄 감기</small>
+              <small>SPACE 챔질 / R 길게·휠 감기 / [ ] 드랙 / Q·E 각도</small>
+              {['waiting', 'bite', 'fighting'].includes(state.phase) && (
+                <button
+                  className="quiet"
+                  disabled={state.paused}
+                  onClick={() => action('recall')}
+                >
+                  채비 회수
+                </button>
+              )}
             </div>
           </div>
         </>
@@ -567,11 +802,18 @@ function FishingController() {
     lastFlick = useRef(0),
     latestMotion = useRef(0),
     sensorOn = useRef(false);
+  const reeling = useRef(false);
+  useGameInterruption(() => {
+    reeling.current = false;
+    if (connected) send('hold');
+  });
   stateRef.current = state;
   useEffect(() => {
     setCode(new URLSearchParams(location.search).get('code') || '');
     const timer = setInterval(() => {
       packet.current.time = Date.now();
+      if (reeling.current && !document.hidden && !stateRef.current.paused)
+        send('reel', 0.034);
       link.current?.send(packet.current);
       if (
         sensorOn.current &&
@@ -588,6 +830,7 @@ function FishingController() {
     };
   }, []);
   function send(action: string, value = 0.5) {
+    if (action === 'rod') packet.current.y = value;
     packet.current.events.push({
       id: ++sequence.current,
       action,
@@ -603,11 +846,12 @@ function FishingController() {
     setBusy(true);
     setError('');
     try {
-      const r = await api('join', { code, game: 'fishing' });
+      const r = await connectGame('phone', 'fishing', code);
+      link.current?.close();
       const l = (link.current = new Link(r, 'phone'));
       l.onConnection = setStatus;
       l.onStatus = (s: FishingState) => {
-        if (s.game !== 'fishing') return;
+        if (s.game !== 'fishing' || !s.phase) return;
         if (s.phase !== stateRef.current.phase) {
           if (s.phase === 'bite') navigator.vibrate?.([80, 40, 80]);
           if (s.phase === 'caught') navigator.vibrate?.([40, 40, 120]);
@@ -621,6 +865,7 @@ function FishingController() {
       setBusy(false);
     }
   }
+  useResumeGame('phone', join);
   async function enable() {
     setError('');
     try {
@@ -742,9 +987,13 @@ function FishingController() {
                     ? '이제 앞으로 휘두르세요!'
                     : gestureStage === 'back'
                       ? '뒤로 조금 더 들어 올리세요'
-                      : '뒤로 준비 → 앞으로 캐스팅'
+                      : sensor
+                        ? '뒤로 준비 → 앞으로 캐스팅'
+                        : '아래 캐스팅 버튼을 누르세요'
                   : state.phase === 'bite'
-                    ? '지금 위로 튕겨 챔질!'
+                    ? sensor
+                      ? '지금 위로 튕겨 챔질!'
+                      : '지금 챔질 버튼을 누르세요!'
                     : state.phase === 'fighting'
                       ? '릴을 돌려 끌어올리세요'
                       : state.message}
@@ -771,10 +1020,28 @@ function FishingController() {
             </div>
           )}
           {state.phase === 'fighting' && <Meter state={state} />}
+          <FishingRigControls state={state} action={send} />
           <Reel
-            disabled={state.phase !== 'fighting' || state.paused}
+            disabled={
+              (state.phase !== 'fighting' &&
+                !(state.phase === 'waiting' && state.rig === 2)) ||
+              state.paused
+            }
             onReel={(n) => send('reel', n)}
           />
+          <HoldButton
+            className="fish-hold-reel"
+            disabled={
+              state.paused ||
+              (state.phase !== 'fighting' &&
+                !(state.phase === 'waiting' && state.rig === 2))
+            }
+            onHold={(held) => {
+              reeling.current = held;
+            }}
+          >
+            <RotateCcw size={20} /> 누르고 줄 감기
+          </HoldButton>
           <div className="fish-phone-buttons">
             <button
               disabled={
@@ -799,7 +1066,7 @@ function FishingController() {
             <button className="quiet" onClick={() => send('pause')}>
               {state.paused ? '계속하기' : '일시정지'}
             </button>
-            <button className="quiet" onClick={enable}>
+            <button className="quiet" onClick={enable} disabled={!sensor}>
               기본 자세 재설정
             </button>
           </div>

@@ -1,7 +1,12 @@
 'use client';
+import { useResumeGame } from '@/lib/use-resume-game';
+import { isGameShortcut, smoothControl } from '@/lib/game-input';
+import { useGameInterruption } from '@/lib/use-game-interruption';
+import HoldButton from '@/components/hold-button';
+import { connectGame, savedSession } from '@/lib/game-session';
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { api, Link, type Packet } from '@/lib/link';
+import { Link, type Packet } from '@/lib/link';
 import { RacingScene } from '@/lib/racing-scene';
 import {
   RacingModel,
@@ -9,6 +14,9 @@ import {
   gravityFromOrientation,
   idleInput,
   TRACK_LENGTH,
+  TOTAL_LAPS,
+  RACE_DISTANCE,
+  trackPoint,
   type DriveInput,
   type RaceState,
   type Gravity,
@@ -19,7 +27,97 @@ const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)
     .toString()
     .padStart(2, '0')}:${(seconds % 60).toFixed(1).padStart(4, '0')}`;
+const mapPoint = (d: number) => {
+  const p = trackPoint(d);
+  return { x: 100 + p.x / 5.6, y: 100 + p.z / 5.6 };
+};
+const mapPath =
+  Array.from({ length: 161 }, (_, i) => {
+    const p = mapPoint((i / 160) * TRACK_LENGTH);
+    return `${i ? 'L' : 'M'}${p.x},${p.y}`;
+  }).join(' ') + ' Z';
+function CircuitMap({ state }: { state: RaceState }) {
+  return (
+    <div className="race-circuit-map">
+      <span>APEX INTERNATIONAL</span>
+      <svg viewBox="0 0 200 200" aria-label="서킷과 선수 위치">
+        <path d={mapPath} fill="none" stroke="#ffffff65" strokeWidth="5" />
+        {state.standings.map((c) => {
+          const p = mapPoint(c.distance);
+          return (
+            <circle
+              key={c.name}
+              cx={p.x}
+              cy={p.y}
+              r={c.player ? 5 : 3}
+              fill={c.player ? '#f9e45b' : '#f4f5f6'}
+            />
+          );
+        })}
+      </svg>
+      <small>2.4 KM · 3 LAPS · GT SPRINT</small>
+    </div>
+  );
+}
+function Classification({ state }: { state: RaceState }) {
+  return (
+    <ol className="race-classification">
+      {state.standings.map((c, i) => (
+        <li key={c.name} className={c.player ? 'is-player' : ''}>
+          <b>{i + 1}</b>
+          <span>{c.name}</span>
+          <small>
+            {c.time !== null
+              ? clock(c.time)
+              : c.player
+                ? 'YOU'
+                : `${Math.abs(c.distance - state.distance).toFixed(0)} m`}
+          </small>
+        </li>
+      ))}
+    </ol>
+  );
+}
 type RacePacket = Packet & { drive?: DriveInput };
+function DriveControls({
+  onInput,
+  disabled = false,
+}: {
+  onInput: (input: DriveInput) => void;
+  disabled?: boolean;
+}) {
+  const held = useRef(new Set<string>());
+  return (
+    <div className="drive-touch-controls" aria-label="터치 운전">
+      {[
+        ['left', '←', '왼쪽 조향'],
+        ['right', '→', '오른쪽 조향'],
+        ['brake', '제동', '브레이크'],
+        ['throttle', '가속', '액셀'],
+      ].map(([key, text, label]) => (
+        <HoldButton
+          key={key}
+          label={label}
+          disabled={disabled}
+          className={`drive-${key}`}
+          onHold={(down) => {
+            if (down) held.current.add(key);
+            else held.current.delete(key);
+            onInput({
+              steer:
+                Number(held.current.has('right')) -
+                Number(held.current.has('left')),
+              throttle: Number(held.current.has('throttle')),
+              brake: Number(held.current.has('brake')),
+            });
+          }}
+        >
+          {text}
+        </HoldButton>
+      ))}
+    </div>
+  );
+}
 function Pedals({ input }: { input: DriveInput }) {
   return (
     <div className="race-pedals">
@@ -46,8 +144,9 @@ export default function Racing() {
   useEffect(() => {
     const p = new URLSearchParams(location.search);
     setPhone(
-      p.get('role') === 'phone' ||
+      (p.get('role') || savedSession()?.role) === 'phone' ||
         (!p.has('role') &&
+          !savedSession() &&
           /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)),
     );
     setReady(true);
@@ -59,7 +158,7 @@ export default function Racing() {
         <a href="/fishing">STILLWATER</a>
         <b>APEX DRIVE</b>
         <button onClick={() => setPhone(!phone)}>
-          {phone ? 'PC 화면' : '폰 컨트롤러'} ↗
+          {phone ? '직접 플레이' : '폰 컨트롤러'} ↗
         </button>
       </nav>
       {ready && (phone ? <Controller /> : <Host />)}
@@ -72,6 +171,8 @@ function Host() {
     scene = useRef<RacingScene | null>(null),
     link = useRef<Link | null>(null),
     keys = useRef(new Set<string>()),
+    touchInput = useRef(idleInput()),
+    localSteer = useRef(0),
     remote = useRef(false),
     lastStamp = useRef(0),
     lastSeen = useRef(0),
@@ -96,12 +197,7 @@ function Host() {
       return;
     }
     const down = (e: KeyboardEvent) => {
-      if (
-        ['INPUT', 'TEXTAREA'].includes(
-          (e.target as HTMLElement).tagName,
-        )
-      )
-        return;
+      if (!isGameShortcut(e)) return;
       if (
         ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(
           e.code,
@@ -121,6 +217,8 @@ function Host() {
     const up = (e: KeyboardEvent) => keys.current.delete(e.code);
     const hide = () => {
       keys.current.clear();
+      touchInput.current = idleInput();
+      localSteer.current = 0;
       s.model.setInput(idleInput());
       if (['racing', 'countdown'].includes(s.model.state.phase))
         s.model.state.paused = true;
@@ -147,12 +245,17 @@ function Host() {
         }
       } else {
         const k = keys.current;
+        const target =
+          (k.has('ArrowRight') || k.has('KeyD') ? 1 : 0) -
+            (k.has('ArrowLeft') || k.has('KeyA') ? 1 : 0) ||
+          touchInput.current.steer;
+        localSteer.current = smoothControl(localSteer.current, target, 0.05);
         s.model.setInput({
-          steer:
-            (k.has('ArrowRight') || k.has('KeyD') ? 1 : 0) -
-            (k.has('ArrowLeft') || k.has('KeyA') ? 1 : 0),
-          throttle: k.has('ArrowUp') || k.has('KeyW') ? 1 : 0,
-          brake: k.has('ArrowDown') || k.has('KeyS') ? 1 : 0,
+          steer: localSteer.current,
+          throttle:
+            k.has('ArrowUp') || k.has('KeyW') ? 1 : touchInput.current.throttle,
+          brake:
+            k.has('ArrowDown') || k.has('KeyS') ? 1 : touchInput.current.brake,
         });
       }
       link.current?.send({ ...s.model.state, time: Date.now() });
@@ -179,11 +282,11 @@ function Host() {
     if (scene.current)
       scene.current.model.state.paused = !scene.current.model.state.paused;
   }
-  async function create() {
+  async function create(fresh = false) {
     setBusy(true);
     setError('');
     try {
-      const r = await api('create', { game: 'racing' });
+      const r = await connectGame('host', 'racing', '', fresh);
       link.current?.close();
       remote.current = false;
       lastStamp.current = 0;
@@ -226,6 +329,20 @@ function Host() {
       setBusy(false);
     }
   }
+  useResumeGame('host', create);
+  useGameInterruption(() => {
+    keys.current.clear();
+    touchInput.current = idleInput();
+    localSteer.current = 0;
+    if (
+      scene.current &&
+      ['racing', 'countdown'].includes(scene.current.model.state.phase)
+    ) {
+      scene.current.model.setInput(idleInput());
+      scene.current.model.state.paused = true;
+    }
+  });
+
   return (
     <section
       ref={container}
@@ -235,7 +352,7 @@ function Host() {
       <div className="race-vignette" />
       <header className="race-top">
         <div>
-          <span>01 / CANYON RUN</span>
+          <span>GT SPRINT / ROUND 01</span>
           <b>
             APEX<span>DRIVE</span>
           </b>
@@ -257,15 +374,20 @@ function Host() {
           )}
           <button
             aria-label="전체 화면"
-            onClick={() => {
-              if (document.fullscreenElement)
-                document.exitFullscreen().catch(() => {});
-              else
-                container.current
-                  ?.requestFullscreen()
-                  .catch(() =>
-                    setError('브라우저의 전체화면 기능을 사용해 주세요.'),
+            onClick={async () => {
+              try {
+                if (document.fullscreenElement) await document.exitFullscreen();
+                else if (container.current?.requestFullscreen)
+                  await container.current.requestFullscreen();
+                else
+                  setError(
+                    '브라우저에서 전체화면을 지원하지 않습니다. 현재 화면에서 계속 즐길 수 있어요.',
                   );
+              } catch {
+                setError(
+                  '전체화면을 열지 못했습니다. 현재 화면에서 계속 즐길 수 있어요.',
+                );
+              }
             }}
           >
             ⛶
@@ -284,48 +406,108 @@ function Host() {
       </header>
       {!active && (
         <div className="race-intro">
-          <span className="race-eyebrow">YOUR PHONE. YOUR STEERING WHEEL.</span>
+          <span className="race-eyebrow">
+            RACE WEEKEND / APEX INTERNATIONAL
+          </span>
           <h1>
-            손끝의 기울기,
+            그리드에서,
             <br />
-            <em>질주가 되다.</em>
+            <em>포디움까지.</em>
           </h1>
           <p>
-            붉은 협곡을 가로지르는 3km의 도로.
+            8대의 GT 레이스카, 2.4km 폐쇄형 서킷.
             <br />
-            폰을 핸들처럼 잡고, 다음 코너로.
+            3랩 동안 경쟁하고 가장 먼저 체커기를 받으세요.
           </p>
           <div className="race-buttons">
-            <button className="race-primary" onClick={() => setSetup(true)}>
-              폰으로 드라이브 ↗
+            <button
+              className="race-primary"
+              onClick={() => {
+                if (
+                  scene.current &&
+                  ['racing', 'countdown'].includes(state.phase)
+                ) {
+                  setActive(true);
+                  setSetup(false);
+                  scene.current.model.state.paused = false;
+                } else start();
+              }}
+            >
+              {['racing', 'countdown'].includes(state.phase)
+                ? '이어서 달리기'
+                : '레이스 시작'}
             </button>
-            <button onClick={start}>PC로 먼저 달리기</button>
+            <button onClick={() => setSetup(true)}>폰 핸들 연결 ↗</button>
           </div>
+          <p>WASD / 방향키로 운전 · 자동 변속 · 조향 보조</p>
           <div className="race-spec">
             <span>
-              <b>3.0</b> KM COURSE
+              <b>3</b> LAPS
             </span>
             <span>
-              <b>220</b> KM/H MAX
+              <b>8</b> DRIVERS
             </span>
             <span>
-              <b>모션</b> STEERING
+              <b>GT</b> SPRINT
             </span>
           </div>
         </div>
       )}
       {active && (
         <>
-          <div className="race-timing">
-            <span>TIME</span>
-            <b>{clock(state.elapsed)}</b>
-            <span>충돌 {state.collisions}회</span>
+          <div className="race-local-touch">
+            <DriveControls
+              disabled={state.paused || state.phase !== 'racing'}
+              onInput={(input) => {
+                touchInput.current = input;
+                if (input.steer || input.throttle || input.brake)
+                  remote.current = false;
+              }}
+            />
           </div>
+          <div className="race-timing">
+            <span>POSITION / LAP</span>
+            <b>
+              P{state.position} <small>/ 8</small>
+            </b>
+            <strong>
+              LAP {state.lap} / {TOTAL_LAPS}
+            </strong>
+            <Classification state={state} />
+          </div>
+          <div className="race-lap-timing">
+            <span>
+              현재 랩 <b>{clock(state.lapTime)}</b>
+            </span>
+            <span>
+              베스트{' '}
+              <b>{state.bestLap === null ? '—' : clock(state.bestLap)}</b>
+            </span>
+            <span>
+              이전 랩{' '}
+              <b>
+                {state.lastLap === null ? '—' : clock(state.lastLap)}
+                {!state.lastLapValid ? ' *' : ''}
+              </b>
+            </span>
+            <span>
+              전체 시간 <b>{clock(state.elapsed)}</b>
+            </span>
+            {!state.lapValid && <em>코스 이탈 · 베스트 기록 제외</em>}
+          </div>
+          <CircuitMap state={state} />
           <div className="race-progress">
-            <i style={{ width: (state.distance / TRACK_LENGTH) * 100 + '%' }} />
-            <span>{(state.distance / 1000).toFixed(2)} / 3.00 KM</span>
+            <i
+              style={{ width: (state.distance / RACE_DISTANCE) * 100 + '%' }}
+            />
+            <span>{(state.distance / 1000).toFixed(2)} / 7.20 KM</span>
           </div>
           <div className="race-dashboard">
+            <div className="race-gear">
+              <span>GEAR</span>
+              <b>{state.gear}</b>
+              <small>AUTO</small>
+            </div>
             <div className="race-speed">
               <b>{Math.round(state.speed * 3.6)}</b>
               <span>KM/H</span>
@@ -338,6 +520,12 @@ function Host() {
             </div>
             <Pedals input={state.input} />
           </div>
+          <div className="race-rev">
+            <i style={{ width: `${(state.rpm / 7500) * 100}%` }} />
+            <span>
+              {state.rpm} RPM · 코너 권장 {state.cornerSpeed} KM/H
+            </span>
+          </div>
           <div className="race-key-hint">
             ↑ / W 가속 · ↓ / S 제동 · ← → 조향 · SPACE 일시정지
           </div>
@@ -349,8 +537,15 @@ function Host() {
           {state.hit > 0 && <div className="race-impact" />}
           {state.phase === 'countdown' && !state.paused && (
             <div className="race-countdown">
-              {Math.ceil(state.countdown)}
-              <small>핸들을 잡고 준비하세요</small>
+              <div className="race-start-lights">
+                {[0, 1, 2].map((n) => (
+                  <i
+                    key={n}
+                    className={3 - state.countdown >= n ? 'lit' : ''}
+                  />
+                ))}
+              </div>
+              <small>신호가 꺼지면 출발 · {Math.ceil(state.countdown)}</small>
             </div>
           )}
           {state.paused && !setup && state.phase !== 'finished' && (
@@ -372,10 +567,21 @@ function Host() {
           )}
           {state.phase === 'finished' && (
             <div className="race-modal">
-              <span className="race-eyebrow">FINISH / CANYON RUN</span>
-              <h2>완주했습니다.</h2>
+              <span className="race-eyebrow">CHEQUERED FLAG / GT SPRINT</span>
+              <h2>
+                {state.position === 1
+                  ? '우승했습니다!'
+                  : `${state.position}위로 완주했습니다.`}
+              </h2>
               <strong className="race-result">{clock(state.elapsed)}</strong>
-              <p>3.00 km · 충돌 {state.collisions}회</p>
+              <p>
+                3 LAPS · 7.20 km · 충돌 {state.collisions}회<br />
+                베스트 랩{' '}
+                {state.bestLap === null
+                  ? '유효 기록 없음'
+                  : clock(state.bestLap)}
+              </p>
+              <Classification state={state} />
               <button
                 className="race-primary"
                 onClick={() => {
@@ -412,7 +618,11 @@ function Host() {
               </div>
             </div>
           ) : null}
-          <button className="race-primary" disabled={busy} onClick={create}>
+          <button
+            className="race-primary"
+            disabled={busy}
+            onClick={() => void create(true)}
+          >
             {busy
               ? '코드 생성 중…'
               : room
@@ -442,6 +652,8 @@ function Controller() {
     eventId = useRef(0),
     lastStatus = useRef(0),
     lastStatusStamp = useRef(0);
+  const touchMode = useRef(false),
+    touchInput = useRef(idleInput());
   const [code, setCode] = useState(''),
     [joined, setJoined] = useState(false),
     [busy, setBusy] = useState(false),
@@ -454,6 +666,7 @@ function Controller() {
     [live, setLive] = useState(false),
     [landscape, setLandscape] = useState(false),
     [sample, setSample] = useState(false);
+  const [touch, setTouch] = useState(false);
   const sendEvent = (action: string) => {
     events.current.push({ id: ++eventId.current, action, x: 0, y: 0 });
     events.current = events.current.slice(-12);
@@ -472,6 +685,7 @@ function Controller() {
     const change = () => orientation();
     const onSensor = (e: DeviceOrientationEvent) => {
       if (
+        touchMode.current ||
         !enabled.current ||
         e.beta === null ||
         e.gamma === null ||
@@ -502,7 +716,20 @@ function Controller() {
         performance.now() - sensorAt.current < 600 &&
         sensorAt.current > 0;
       setSample(fresh);
-      if (!fresh || !wheel.current.baseline || document.hidden)
+      if (touchMode.current) {
+        drive.current = {
+          ...touchInput.current,
+          steer: smoothControl(
+            drive.current.steer,
+            touchInput.current.steer,
+            0.04,
+          ),
+        };
+      }
+      if (
+        (!touchMode.current && (!fresh || !wheel.current.baseline)) ||
+        document.hidden
+      )
         drive.current = { steer: 0, throttle: 0, brake: 1 };
       setInput({ ...drive.current });
       setLive(lastStatus.current > 0 && Date.now() - lastStatus.current < 3000);
@@ -528,7 +755,7 @@ function Controller() {
     setBusy(true);
     setError('');
     try {
-      const r = await api('join', { code, game: 'racing' });
+      const r = await connectGame('phone', 'racing', code);
       link.current?.close();
       const l = (link.current = new Link(r, 'phone'));
       l.onConnection = setConnection;
@@ -548,11 +775,19 @@ function Controller() {
       setBusy(false);
     }
   }
+  useResumeGame('phone', join);
+  useGameInterruption(() => {
+    touchInput.current = idleInput();
+    drive.current = idleInput();
+    if (joined) sendEvent('hold');
+  });
   async function enable() {
     setError('');
     try {
       if (!window.isSecureContext)
         throw Error('모션 센서는 HTTPS 주소에서 열어야 합니다.');
+      if (typeof DeviceOrientationEvent === 'undefined')
+        throw Error('센서가 없는 기기입니다. 터치 운전을 선택해 주세요.');
       const O = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
         requestPermission?: () => Promise<string>;
       };
@@ -624,32 +859,60 @@ function Controller() {
         <>
           <div className="race-phone-grid">
             <div className="race-phone-controls">
+              <fieldset className="drive-mode" aria-label="운전 방식">
+                {[false, true].map((value) => (
+                  <button
+                    key={String(value)}
+                    aria-pressed={touch === value}
+                    onClick={() => {
+                      touchMode.current = value;
+                      setTouch(value);
+                      touchInput.current = idleInput();
+                      drive.current = idleInput();
+                      sendEvent('hold');
+                      setError('');
+                    }}
+                  >
+                    {value ? '터치 운전' : '모션 운전'}
+                  </button>
+                ))}
+              </fieldset>
               <h2>
-                {!sensor
-                  ? '모션 조작 켜기'
-                  : !calibrated
-                    ? '기준 자세를 잡으세요'
-                    : '당신의 손이 핸들입니다'}
+                {touch
+                  ? '편하게 누르고 달리세요'
+                  : !sensor
+                    ? '모션 조작 켜기'
+                    : !calibrated
+                      ? '기준 자세를 잡으세요'
+                      : '당신의 손이 핸들입니다'}
               </h2>
-              <p>
-                폰을 가로로 세워 두 손으로 잡으세요.
-                <br />
-                편하게 잡은 각도가 가속·제동의 중심이 됩니다.
-              </p>
-              {!sensor ? (
-                <button className="race-primary" onClick={enable}>
-                  모션 센서 허용
-                </button>
+              {touch ? (
+                <p>
+                  방향과 가속 버튼을 함께 누를 수 있어요. 손을 떼면 가속이
+                  풀립니다.
+                </p>
               ) : (
-                <button onClick={calibrate} disabled={!sample}>
-                  {calibrated
-                    ? '현재 자세로 다시 맞추기'
-                    : sample
-                      ? '이 자세를 기준으로 설정'
-                      : '센서 신호 기다리는 중…'}
-                </button>
+                <p>
+                  폰을 가로로 세워 두 손으로 잡으세요.
+                  <br />
+                  편하게 잡은 각도가 가속·제동의 중심이 됩니다.
+                </p>
               )}
-              {sensor && !sample && (
+              {!touch &&
+                (!sensor ? (
+                  <button className="race-primary" onClick={enable}>
+                    모션 센서 허용
+                  </button>
+                ) : (
+                  <button onClick={calibrate} disabled={!sample}>
+                    {calibrated
+                      ? '현재 자세로 다시 맞추기'
+                      : sample
+                        ? '이 자세를 기준으로 설정'
+                        : '센서 신호 기다리는 중…'}
+                  </button>
+                ))}
+              {!touch && sensor && !sample && (
                 <small>
                   센서 신호가 없으면 Safari 또는 Chrome에서 열고 모션 권한을
                   확인하세요.
@@ -658,7 +921,9 @@ function Controller() {
               <div className="race-phone-actions">
                 <button
                   className="race-primary"
-                  disabled={!calibrated || !sample || !landscape || !live}
+                  disabled={
+                    (!touch && (!calibrated || !sample || !landscape)) || !live
+                  }
                   onClick={() => {
                     if (state.phase === 'ready' || state.phase === 'finished')
                       sendEvent('start');
@@ -692,13 +957,23 @@ function Controller() {
               <Pedals input={input} />
             </div>
           </div>
-          <footer className="race-phone-guide">
-            <span>↶ 좌우 회전 = 조향</span>
-            <span>↗ 윗면 앞으로 = 가속</span>
-            <span>↙ 몸쪽으로 = 브레이크</span>
-            <small>중립 ±4° · 25°에서 최대 가속·제동 · 조향 최대 35°</small>
-          </footer>
-          {!landscape && (
+          {touch && (
+            <DriveControls
+              disabled={!live || state.paused || state.phase !== 'racing'}
+              onInput={(value) => {
+                touchInput.current = value;
+              }}
+            />
+          )}
+          {!touch && (
+            <footer className="race-phone-guide">
+              <span>↶ 좌우 회전 = 조향</span>
+              <span>↗ 윗면 앞으로 = 가속</span>
+              <span>↙ 몸쪽으로 = 브레이크</span>
+              <small>중립 ±4° · 25°에서 최대 가속·제동 · 조향 최대 35°</small>
+            </footer>
+          )}
+          {!touch && !landscape && (
             <p className="race-rotate">
               ↻ 폰을 가로로 돌려 주세요. 화면 회전 잠금도 해제해 주세요.
             </p>

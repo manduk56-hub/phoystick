@@ -28,6 +28,80 @@ yarn-error.log*
 
 # local environment
 .env*
+# Only sanitized templates belong in Git. Never put real values in these.
+!.env.example
+!.env.sample
+!.env.template
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+!.dev.vars.sample
+!.dev.vars.template
+
+# private credentials and machine-specific authentication
+/.ssh/
+/.aws/
+/.azure/
+/.config/gcloud/
+/secrets/
+/credentials/
+/.npmrc
+/.netrc
+/_netrc
+/.pgpass
+/.my.cnf
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+id_dsa
+id_dsa.*
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+privkey*.pem
+*service-account*.json
+*service_account*.json
+
+# runtime databases and dumps (keep db/ code and drizzle/ migrations)
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+/backups/
+/dumps/
+
+# logs, caches and local test reports
+*.log
+*.log.*
+/logs/
+/.cache/
+/.vite/
+/.turbo/
+/.eslintcache
+/.stylelintcache
+/playwright-report/
+/test-results/
+
+# local editor and operating-system artifacts
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.code-workspace
+/.idea/
+/.vscode/*.local.json
 
 # deployment and generated files
 .vercel
