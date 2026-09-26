@@ -3,24 +3,48 @@ import { Reflector } from 'three/addons/objects/Reflector.js';
 
 export function lakeBackdrop(texture: T.Texture) {
   texture.colorSpace = T.SRGBColorSpace;
-  // Only the landscape above the shoreline belongs on the backdrop.
-  // The lower photographic water is replaced by the reflective lake.
-  texture.repeat.set(-1, 0.49);
-  texture.offset.set(1, 0.51);
+  texture.repeat.set(1, 1);
+  texture.offset.set(0, 0);
+  // A continuous sky dome covers the entire casting frustum, including the zenith.
+  // Cylindrical projection preserves the existing landscape scale near the horizon.
   const backdrop = new T.Mesh(
-    new T.CylinderGeometry(
-      150,
-      150,
-      78,
-      96,
-      1,
-      true,
-      Math.PI * 0.75,
-      Math.PI * 0.5,
-    ),
-    new T.MeshBasicMaterial({ map: texture, side: T.BackSide, fog: false }),
+    new T.SphereGeometry(280, 96, 64, 0, Math.PI * 2, 0, Math.PI * 0.51),
+    new T.ShaderMaterial({
+      uniforms: { landscape: { value: texture } },
+      side: T.BackSide,
+      depthWrite: false,
+      fog: false,
+      vertexShader: `
+        varying vec3 direction;
+        void main() {
+          direction = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D landscape;
+        varying vec3 direction;
+        void main() {
+          float azimuth = atan(direction.x, -direction.z);
+          float panoramaU = 0.5 + azimuth / 1.570796327;
+          // Mirror beyond the photograph's sides to avoid exposed side edges.
+          float u = 1.0 - abs(mod(panoramaU, 2.0) - 1.0);
+          float height = 150.0 * direction.y / max(length(direction.xz), 0.001);
+          float v = clamp((height + 2.0) / 78.0, 0.0, 1.0);
+          vec3 scenery = texture2D(landscape, vec2(u, 0.51 + v * 0.49)).rgb;
+          vec3 edgeSky = texture2D(landscape, vec2(u, 0.995)).rgb;
+          // Continue the image's sky into an uninterrupted overhead hemisphere.
+          float extension = smoothstep(60.0, 95.0, height);
+          vec3 zenith = vec3(0.43, 0.59, 0.72);
+          vec3 sky = mix(edgeSky, zenith, smoothstep(95.0, 330.0, height));
+          gl_FragColor = vec4(mix(scenery, sky, extension), 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+    }),
   );
-  backdrop.position.y = 37;
+  backdrop.renderOrder = -10;
   return backdrop;
 }
 
