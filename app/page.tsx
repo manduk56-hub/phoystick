@@ -1,5 +1,6 @@
 'use client';
 import { useResumeGame } from '@/lib/use-resume-game';
+import { usePhoneLandscape } from '@/lib/use-phone-landscape';
 import { isGameShortcut, normalizedPoint } from '@/lib/game-input';
 import { useGameInterruption } from '@/lib/use-game-interruption';
 import { connectGame, savedSession } from '@/lib/game-session';
@@ -867,6 +868,7 @@ function Controller() {
     lastFire = useRef(0),
     threshold = useRef(sensitivity),
     hudRef = useRef(hud);
+  usePhoneLandscape(connected);
   stepRef.current = step;
   data.current.calibration = sensor && step < 5 ? step : null;
   threshold.current = sensitivity;

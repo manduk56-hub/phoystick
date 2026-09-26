@@ -63,6 +63,7 @@ export default function GameMenu() {
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape, true);
     return () => {
+      window.dispatchEvent(new Event('game-menu-close'));
       document.removeEventListener('pointerdown', outside);
       document.removeEventListener('keydown', escape, true);
     };

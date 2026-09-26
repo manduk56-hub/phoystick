@@ -1,5 +1,6 @@
 'use client';
 import { useResumeGame } from '@/lib/use-resume-game';
+import { usePhoneLandscape } from '@/lib/use-phone-landscape';
 import { isGameShortcut, smoothControl } from '@/lib/game-input';
 import { useGameInterruption } from '@/lib/use-game-interruption';
 import HoldButton from '@/components/hold-button';
@@ -687,6 +688,7 @@ function Controller() {
     [landscape, setLandscape] = useState(false),
     [sample, setSample] = useState(false);
   const [touch, setTouch] = useState(false);
+  usePhoneLandscape(joined);
   const sendEvent = (action: string) => {
     events.current.push({ id: ++eventId.current, action, x: 0, y: 0 });
     events.current = events.current.slice(-12);
