@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Link from 'next/link';
 import './globals.css';
 import GameMenu from '@/components/game-menu';
 export const metadata: Metadata = {
@@ -19,7 +20,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <GameMenu />
         <footer className="site-footer">
           <span>PHOYSTICK</span>
-          <a href="/credits">크레딧</a>
+          <Link href="/credits">크레딧</Link>
         </footer>
       </body>
     </html>
