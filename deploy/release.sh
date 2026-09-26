@@ -67,6 +67,13 @@ stopped=true
 service stop motion-games.service motion-games-api.service
 for relative in .wrangler dist/server/.wrangler; do
   shared="$root/shared/runtime/$relative"
+  if [[ -n "$previous" && -L "$previous/$relative" ]]; then
+    shared=$(readlink -f "$previous/$relative")
+    case "$shared" in
+      "$root/shared/"*) ;;
+      *) echo 'Existing database symlink must point into shared/.' >&2; exit 1 ;;
+    esac
+  fi
   mkdir -p "$(dirname "$shared")"
   if [[ ! -d "$shared" ]]; then
     if [[ -n "$previous" && -d "$previous/$relative" ]]; then
