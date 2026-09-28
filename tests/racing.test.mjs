@@ -27,6 +27,39 @@ const settle = (w, g) => {
   for (let i = 0; i < 60; i++) out = w.update(g, 0.02);
   return out;
 };
+test('steering eases into turns, reverses smoothly and resets on restart', () => {
+  const m = new RacingModel();
+  m.state.phase = 'racing';
+  m.state.speed = 30;
+  m.traffic = [];
+  m.setInput({ steer: 1, throttle: 0, brake: 0 });
+  m.tick(1 / 60);
+  assert.ok(m.steering > 0 && m.steering < 0.25);
+  for (let i = 0; i < 30; i++) m.tick(1 / 60);
+  assert.ok(m.steering > 0.99);
+  m.setInput({ steer: -1, throttle: 0, brake: 0 });
+  m.tick(1 / 60);
+  assert.ok(m.steering > 0, 'reversing does not snap to the opposite direction');
+  for (let i = 0; i < 30; i++) m.tick(1 / 60);
+  assert.ok(m.steering < -0.99);
+  m.setInput({ steer: 0, throttle: 0, brake: 0 });
+  for (let i = 0; i < 30; i++) m.tick(1 / 60);
+  assert.ok(Math.abs(m.steering) < 0.01, 'release settles promptly');
+  m.start();
+  assert.equal(m.steering, 0);
+});
+
+test('steering response is consistent at 30, 60 and 120 frames per second', () => {
+  const results = [30, 60, 120].map((fps) => {
+    const m = new RacingModel();
+    m.state.phase = 'racing';
+    m.traffic = [];
+    m.setInput({ steer: 1, throttle: 0, brake: 0 });
+    for (let i = 0; i < fps / 2; i++) m.tick(1 / fps);
+    return m.steering;
+  });
+  assert.ok(Math.max(...results) - Math.min(...results) < 1e-12);
+});
 test('both landscape grips steer in the same direction and separate steering from pedals', () => {
   for (const side of [1, -1]) {
     const w = new WheelControl();

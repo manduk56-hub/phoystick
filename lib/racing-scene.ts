@@ -226,7 +226,7 @@ export class RacingScene {
     this.cockpit.visible = inside;
     this.player.visible = chase;
     this.player.position.set(s.lateral, 0.04, 0);
-    this.player.rotation.set(0, -s.input.steer * 0.10, -s.input.steer * s.speed * 0.0005);
+    this.player.rotation.set(0, -this.model.steering * 0.10, -this.model.steering * s.speed * 0.0005);
     this.player.traverse((o) => {
       if (o.name === 'wheel') o.rotation.x -= s.speed * dt / 0.36;
       if (o.name === 'brake' && o instanceof T.Mesh)
@@ -235,7 +235,7 @@ export class RacingScene {
     const far = this.cameraMode === 'far';
     const speedRatio = Math.min(1, s.speed / 65);
     const desired = new T.Vector3(
-      s.lateral - (chase ? s.input.steer * 0.45 : inside ? 0.3 : 0),
+      s.lateral - (chase ? this.model.steering * 0.45 : inside ? 0.3 : 0),
       chase ? (far ? 3.8 : 2.65) : inside ? 1.35 : 1.05,
       chase ? (far ? 10.5 : 7.0) + speedRatio * 1.2 : inside ? 0.25 : -1.65,
     );
@@ -253,7 +253,7 @@ export class RacingScene {
       this.camera.fov = 58;
     }
     this.scene.fog = this.cameraMode === 'overview' ? null : this.raceFog;
-    this.cockpit.update(s.speed, s.input.steer, this.camera.aspect);
+    this.cockpit.update(s.speed, this.model.steering, this.camera.aspect);
     this.camera.updateProjectionMatrix();
     this.renderer.render(this.scene, this.camera);
     this.emit += dt;

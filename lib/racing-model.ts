@@ -158,6 +158,7 @@ export class RacingModel {
     lastLapValid: true,
   };
   lapStarted = 0;
+  steering = 0;
   traffic: Traffic[] = [];
   constructor() {
     this.resetTraffic();
@@ -209,6 +210,7 @@ export class RacingModel {
       lastLapValid: true,
     };
     this.lapStarted = 0;
+    this.steering = 0;
     this.resetTraffic();
     this.updateStandings();
   }
@@ -258,6 +260,14 @@ export class RacingModel {
     s.elapsed += dt;
     s.hit = Math.max(0, s.hit - dt);
     const { steer, throttle, brake } = s.input;
+    // Smooth packet/key changes at render frequency, including direction reversals.
+    // Integrate the response so lateral travel stays consistent across frame rates.
+    const responseTime = 0.09;
+    const previousSteering = this.steering;
+    const decay = Math.exp(-dt / responseTime);
+    this.steering = steer + (previousSteering - steer) * decay;
+    const steeringTravel =
+      steer * dt + (previousSteering - steer) * responseTime * (1 - decay);
     s.offroad = Math.abs(s.lateral) > 5.2;
     if (s.offroad) s.lapValid = false;
     s.cornerSpeed = Math.round(
@@ -282,8 +292,8 @@ export class RacingModel {
     const slip = Math.max(0, Math.abs(curve) * s.speed * s.speed - 9);
     s.lateral = clamp(
       s.lateral +
-        (steer * (1.4 + s.speed * 0.14) - Math.sign(curve) * slip * 0.24) *
-          dt *
+        (steeringTravel * (1.4 + s.speed * 0.14) -
+          Math.sign(curve) * slip * 0.24 * dt) *
           (s.speed > 0 ? 1 : 0),
       -8,
       8,
