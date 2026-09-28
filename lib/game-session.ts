@@ -15,17 +15,29 @@ export type GameSession = {
 };
 const key = 'game-controller-session';
 export function savedSession(): GameSession | null {
-  try {
-    return JSON.parse(sessionStorage.getItem(key) || 'null');
-  } catch {
-    return null;
+  for (const storage of [() => sessionStorage, () => localStorage]) {
+    try {
+      const raw = storage().getItem(key);
+      if (raw) {
+        const value = JSON.parse(raw);
+        if (value?.code && value?.token && value?.role) return value;
+      }
+    } catch {
+      /* Try the other storage when one is unavailable or corrupted. */
+    }
   }
+  return null;
 }
 export function saveSession(value: GameSession) {
   try {
     sessionStorage.setItem(key, JSON.stringify(value));
   } catch {
-    /* Pairing still works when storage is unavailable. */
+    /* Keep the connection in this page when tab storage is unavailable. */
+  }
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* Pairing still works when persistent storage is unavailable. */
   }
   window.dispatchEvent(new Event('game-session'));
 }
@@ -33,7 +45,12 @@ export function forgetSession() {
   try {
     sessionStorage.removeItem(key);
   } catch {
-    /* Private browsing can deny storage. */
+    /* Private browsing can deny tab storage. */
+  }
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* Private browsing can deny persistent storage. */
   }
   window.dispatchEvent(new Event('game-session'));
 }
