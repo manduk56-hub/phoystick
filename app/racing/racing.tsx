@@ -258,10 +258,10 @@ function Host() {
     document.addEventListener('visibilitychange', visibility);
     const timer = setInterval(() => {
       if (remote.current) {
-        if (Date.now() - lastSeen.current > 700)
+        if (Date.now() - lastSeen.current > 1200)
           s.model.setInput({ steer: 0, throttle: 0, brake: 1 });
         if (
-          Date.now() - lastSeen.current > 2500 &&
+          Date.now() - lastSeen.current > 6000 &&
           ['racing', 'countdown'].includes(s.model.state.phase)
         ) {
           s.model.state.paused = true;
@@ -756,7 +756,7 @@ function Controller() {
       )
         drive.current = { steer: 0, throttle: 0, brake: 1 };
       setInput({ ...drive.current });
-      setLive(lastStatus.current > 0 && Date.now() - lastStatus.current < 3000);
+      setLive(lastStatus.current > 0 && Date.now() - lastStatus.current < 6000);
       link.current?.send({
         x: 0,
         y: 0,

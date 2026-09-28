@@ -27,7 +27,13 @@ export async function api(action: string, data: object = {}) {
   return r;
 }
 export class Link {
-  room: { code: string; token: string; version?: number; relayOnly?: boolean };
+  room: {
+    code: string;
+    token: string;
+    version?: number;
+    relayOnly?: boolean;
+    game?: string;
+  };
   role: string;
   rtc: RTCPeerConnection | null = null;
   channel: RTCDataChannel | null = null;
@@ -38,6 +44,8 @@ export class Link {
   latest: any;
   lastSend = 0;
   lastReceive = Date.now();
+  lastDirectReceive = 0;
+  lastPacketTime = 0;
   onInput: (p: Packet) => void = () => {};
   onStatus: (p: any) => void = () => {};
   onConnection: (s: string) => void = () => {};
@@ -47,15 +55,38 @@ export class Link {
       token: string;
       version?: number;
       relayOnly?: boolean;
+      game?: string;
     },
     role: string,
   ) {
     this.room = room;
     this.role = role;
-    this.loop();
+    void this.loop();
+  }
+  receive(p: { time?: number; [key: string]: unknown }, direct: boolean) {
+    if (!p || typeof p !== 'object') return;
+    if (typeof p.time === 'number' && Number.isFinite(p.time)) {
+      if (p.time <= this.lastPacketTime) return;
+      this.lastPacketTime = p.time;
+    }
+    this.lastReceive = Date.now();
+    if (direct) {
+      this.lastDirectReceive = this.lastReceive;
+      this.onConnection('직접 연결');
+    } else if (
+      this.channel?.readyState !== 'open' ||
+      Date.now() - this.lastDirectReceive > 3000
+    )
+      this.onConnection('중계 연결');
+    if (this.role === 'host') this.onInput(p as Packet);
+    else this.onStatus(p);
   }
   async setup(offer?: any) {
     if (this.rtc) return;
+    if (typeof RTCPeerConnection === 'undefined') {
+      this.room.relayOnly = true;
+      return;
+    }
     const pc = (this.rtc = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     }));
@@ -63,10 +94,8 @@ export class Link {
       this.channel = ch;
       ch.onopen = () => this.onConnection('직접 연결');
       ch.onmessage = (e) => {
-        this.lastReceive = Date.now();
         try {
-          const p = JSON.parse(e.data);
-          this.role === 'host' ? this.onInput(p) : this.onStatus(p);
+          this.receive(JSON.parse(e.data), true);
         } catch {}
       };
       ch.onclose = () => this.onConnection('중계 연결');
@@ -96,17 +125,37 @@ export class Link {
   }
   send(p: any) {
     this.latest = p;
-    if (this.channel?.readyState === 'open')
-      this.channel.send(JSON.stringify(p));
+    if (this.channel?.readyState === 'open') {
+      try {
+        this.channel.send(JSON.stringify(p));
+      } catch {
+        this.channel.close();
+        this.channel = null;
+        this.rtc?.close();
+        this.rtc = null;
+        this.room.relayOnly = true;
+        this.onConnection('중계 연결');
+      }
+    }
   }
   async loop() {
     if (this.stopped) return;
+    const racing = this.room.game === 'racing';
     try {
-      if (this.latest && this.channel?.readyState !== 'open')
+      // Racing needs a continuous relay alongside WebRTC. Mobile data channels
+      // can silently stop delivering packets while still reporting "open".
+      if (
+        this.latest &&
+        (racing ||
+          this.channel?.readyState !== 'open' ||
+          Date.now() - this.lastSend > 1000)
+      ) {
         await api(this.role === 'host' ? 'status' : 'input', {
           ...this.room,
           data: this.latest,
         });
+        this.lastSend = Date.now();
+      }
       const r = await api('read', this.room);
       if (r.version !== (this.room.version || 0)) {
         this.close();
@@ -123,20 +172,23 @@ export class Link {
         this.remote = true;
       }
       const raw = this.role === 'host' ? r.input : r.status;
-      if (raw && this.channel?.readyState !== 'open') {
+      if (raw) {
         const p = JSON.parse(raw);
-        this.lastReceive = p.time || Date.now();
-        this.role === 'host' ? this.onInput(p) : this.onStatus(p);
+        this.receive(p, false);
       }
       if (r.paired && Date.now() - this.lastReceive > 6000)
         this.onConnection('연결 확인 중');
     } catch (e) {
-      this.onConnection((e as Error).message);
+      if (
+        this.channel?.readyState !== 'open' ||
+        Date.now() - this.lastDirectReceive > 3000
+      )
+        this.onConnection((e as Error).message);
     }
     if (!this.stopped)
       this.timer = setTimeout(
         () => this.loop(),
-        this.channel?.readyState === 'open' ? 1800 : 140,
+        this.channel?.readyState === 'open' && !racing ? 1800 : 140,
       );
   }
   close() {
