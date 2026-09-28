@@ -666,7 +666,6 @@ function Controller() {
   const link = useRef<Link | null>(null),
     wheel = useRef(new WheelControl()),
     gravity = useRef<Gravity | null>(null),
-    sensorAt = useRef(0),
     enabled = useRef(false),
     drive = useRef<DriveInput>(idleInput()),
     events = useRef<Packet['events']>([]),
@@ -699,6 +698,8 @@ function Controller() {
     const orientation = () => {
       setLandscape(media.matches);
       wheel.current.reset();
+      gravity.current = null;
+      setSample(false);
       setCalibrated(false);
       drive.current = idleInput();
       sendEvent('hold');
@@ -715,14 +716,14 @@ function Controller() {
         !Number.isFinite(e.gamma)
       )
         return;
-      const now = performance.now(),
-        dt = sensorAt.current ? (now - sensorAt.current) / 1000 : 0.016;
-      sensorAt.current = now;
       gravity.current = gravityFromOrientation(e.beta, e.gamma);
-      drive.current = wheel.current.update(gravity.current, dt);
     };
     const hidden = () => {
       if (document.hidden) {
+        wheel.current.reset();
+        gravity.current = null;
+        setSample(false);
+        setCalibrated(false);
         drive.current = idleInput();
         sendEvent('hold');
       }
@@ -733,10 +734,9 @@ function Controller() {
     media.addEventListener('change', change);
     document.addEventListener('visibilitychange', hidden);
     const timer = setInterval(() => {
-      const fresh =
-        enabled.current &&
-        performance.now() - sensorAt.current < 600 &&
-        sensorAt.current > 0;
+      const fresh = enabled.current && gravity.current !== null;
+      // Orientation events may only fire when the pose changes. A stationary
+      // phone's last valid pose remains usable until rotation or interruption.
       setSample(fresh);
       if (touchMode.current) {
         drive.current = {
@@ -747,6 +747,8 @@ function Controller() {
             0.04,
           ),
         };
+      } else if (fresh && gravity.current && !document.hidden) {
+        drive.current = wheel.current.update(gravity.current, 0.04);
       }
       if (
         (!touchMode.current && (!fresh || !wheel.current.baseline)) ||
@@ -826,7 +828,7 @@ function Controller() {
     }
   }
   function calibrate() {
-    if (!gravity.current || !sample) {
+    if (!enabled.current || !gravity.current) {
       setError(
         '센서 신호를 기다리고 있습니다. 모션 권한과 브라우저를 확인해 주세요.',
       );
@@ -836,6 +838,7 @@ function Controller() {
       setError('폰을 가로로 세워 화면을 바라보는 자세로 잡아 주세요.');
       return;
     }
+    drive.current = idleInput();
     setCalibrated(true);
     setError('');
     sendEvent('hold');
@@ -891,6 +894,10 @@ function Controller() {
                       setTouch(value);
                       touchInput.current = idleInput();
                       drive.current = idleInput();
+                      wheel.current.reset();
+                      gravity.current = null;
+                      setSample(false);
+                      setCalibrated(false);
                       sendEvent('hold');
                       setError('');
                     }}
