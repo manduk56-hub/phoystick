@@ -15,8 +15,9 @@ import {
   scannedMaterial,
   assetNotice,
 } from './graphics-assets.ts';
-import { rounded, finish, organic } from './surface.ts';
+import { rounded, finish } from './surface.ts';
 import { RELOAD_SECONDS, reloadPose } from './reload-motion.ts';
+import { GameEngine } from './game-engine.ts';
 export type HUD = {
   health: number;
   ammo: number;
@@ -66,8 +67,7 @@ export class Game {
     hit: '',
   };
   notify: (h: HUD) => void;
-  frame = 0;
-  last = 0;
+  engine: GameEngine;
   spawn = 0;
   flash = 0;
   damage = 0;
@@ -78,7 +78,6 @@ export class Game {
   light: T.PointLight;
   lastShot = 0;
   audio: AudioContext | null = null;
-  resize: ResizeObserver;
   disposed = false;
   elapsed = 0;
   emitTime = 0;
@@ -222,17 +221,8 @@ export class Game {
     this.light = new T.PointLight(0xffce6a, 0, 9);
     this.light.position.set(0.3, -0.2, -1.3);
     this.camera.add(this.light);
-    this.resize = new ResizeObserver(() => {
-      const w = canvas.clientWidth,
-        h = canvas.clientHeight;
-      if (w && h) {
-        this.renderer.setSize(w, h, false);
-        this.camera.aspect = w / h;
-        this.camera.updateProjectionMatrix();
-      }
-    });
-    this.resize.observe(canvas);
-    this.frame = requestAnimationFrame((t) => this.tick(t));
+    this.engine = new GameEngine(canvas, this.renderer, this.camera,
+      (dt) => this.update(dt), () => this.draw());
     this.emit();
   }
   box(w: number, h: number, d: number, c: number) {
@@ -632,11 +622,10 @@ export class Game {
       o.stop(this.audio.currentTime + duration);
     } catch {}
   }
-  tick(t: number) {
+  update(dt: number) {
     if (this.disposed) return;
-    const dt = Math.min((t - this.last) / 1000, 0.05);
-    this.last = t;
     this.elapsed += dt;
+    const t = this.elapsed * 1000;
     if (this.hud.state === 'playing') {
       this.advanceReload(dt);
       this.advanceCampaign(dt);
@@ -726,6 +715,8 @@ export class Game {
     }
     this.flash = Math.max(0, this.flash - dt);
     this.damage = Math.max(0, this.damage - dt);
+  }
+  draw() {
     const pose = reloadPose(
       this.hud.reload,
       this.hud.reloadMotion,
@@ -763,12 +754,10 @@ export class Game {
       ? 'sepia(.6) saturate(2) hue-rotate(320deg)'
       : '';
     this.renderer.render(this.scene, this.camera);
-    this.frame = requestAnimationFrame((v) => this.tick(v));
   }
   dispose() {
     this.disposed = true;
-    cancelAnimationFrame(this.frame);
-    this.resize.disconnect();
+    this.engine.dispose();
     this.scene.traverse((o) => {
       if (o instanceof T.Mesh || o instanceof T.LineSegments) {
         o.geometry.dispose();

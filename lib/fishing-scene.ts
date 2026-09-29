@@ -4,6 +4,7 @@ import { rounded, finish } from './surface.ts';
 import { createFish, RodSpring } from './fishing-detail.ts';
 import { lakeBackdrop, reflectiveLake } from './fishing-environment.ts';
 import { FishingModel, type FishingState } from './fishing-model.ts';
+import { GameEngine } from './game-engine.ts';
 export class FishingScene {
   renderer: T.WebGLRenderer;
   scene = new T.Scene();
@@ -29,9 +30,7 @@ export class FishingScene {
   rodSegments: T.Mesh[] = [];
   guides: T.Mesh[] = [];
   reel: T.Group;
-  resize: ResizeObserver;
-  frame = 0;
-  last = 0;
+  engine: GameEngine;
   time = 0;
   onState: (s: FishingState) => void;
   emit = 0;
@@ -221,16 +220,8 @@ export class FishingScene {
     );
     this.scene.add(this.line);
     this.scene.add(this.fish);
-    this.resize = new ResizeObserver(() => {
-      const w = canvas.clientWidth,
-        h = canvas.clientHeight;
-      if (!w || !h) return;
-      this.renderer.setSize(w, h, false);
-      this.camera.aspect = w / h;
-      this.camera.updateProjectionMatrix();
-    });
-    this.resize.observe(canvas);
-    this.frame = requestAnimationFrame((t) => this.tick(t));
+    this.engine = new GameEngine(canvas, this.renderer, this.camera,
+      (dt) => this.update(dt), (dt) => this.draw(dt));
   }
   selectFish(id: number) {
     if (id === this.fishSpecies) return;
@@ -322,12 +313,12 @@ export class FishingScene {
     if (action === 'repair') this.model.repair();
     this.onState({ ...this.model.state });
   }
-  tick(t: number) {
-    const dt = Math.min(0.05, (t - this.last) / 1000);
-    this.last = t;
+  update(dt: number) {
     if (!this.model.state.paused) this.time += dt;
     this.model.tick(dt);
     if (this.reeling) this.model.reel(dt * 0.85);
+  }
+  draw(dt: number) {
     const s = this.model.state;
     const daylight = Math.max(0.15, Math.sin(((s.hour - 5) / 14) * Math.PI));
     this.sun.intensity =
@@ -533,15 +524,13 @@ export class FishingScene {
       this.onState({ ...s });
     }
     this.renderer.render(this.scene, this.camera);
-    this.frame = requestAnimationFrame((v) => this.tick(v));
   }
   dispose() {
     this.disposed = true;
     this.releaseLook();
     this.water.dispose();
     this.landscapeTexture.dispose();
-    cancelAnimationFrame(this.frame);
-    this.resize.disconnect();
+    this.engine.dispose();
     this.scene.traverse((o) => {
       if (o instanceof T.Mesh || o instanceof T.Line || o instanceof T.Points) {
         o.geometry.dispose();

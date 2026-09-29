@@ -10,6 +10,7 @@ import {
   disposeModel,
 } from './graphics-assets.ts';
 import { Cockpit } from './racing-cockpit.ts';
+import { GameEngine } from './game-engine.ts';
 
 import {
   RacingModel,
@@ -50,7 +51,7 @@ export class RacingScene {
       if (!(o instanceof T.Mesh)) return;
       for (const material of Array.isArray(o.material) ? o.material : [o.material]) {
         if (!(material instanceof T.MeshStandardMaterial)) continue;
-        if (color !== undefined && /^Paint 1 /.test(material.name))
+        if (color !== undefined && material.name.startsWith('Paint 1 '))
           material.color.setHex(color);
         material.envMapIntensity = 1.1;
         if (material.name === 'Brakelight') {
@@ -60,17 +61,15 @@ export class RacingScene {
       }
     });
     const detailed = fitModel(asset.scene, 4.5, 'z');
-    for (const child of [...target.children]) {
+    for (const child of target.children.slice()) {
       target.remove(child);
       disposeModel(child);
     }
     target.add(detailed);
     target.userData.detailed = true;
   }
-  frame = 0;
-  last = 0;
+  engine: GameEngine;
   emit = 0;
-  resize: ResizeObserver;
   constructor(
     canvas: HTMLCanvasElement,
     public onState: (state: RaceState) => void,
@@ -173,20 +172,10 @@ export class RacingScene {
     this.finish.position.set(startPoint.x, 0, -startPoint.z);
     this.finish.rotation.y = -trackHeading(0);
     this.circuit.add(this.finish);
-    this.resize = new ResizeObserver(() => {
-      const { width, height } = canvas.getBoundingClientRect();
-      if (!width || !height) return;
-      this.renderer.setSize(width, height, false);
-      this.camera.aspect = width / height;
-      this.camera.updateProjectionMatrix();
-    });
-    this.resize.observe(canvas);
-    this.frame = requestAnimationFrame(this.loop);
+    this.engine = new GameEngine(canvas, this.renderer, this.camera,
+      (dt) => this.model.tick(dt), (dt) => this.draw(dt));
   }
-  loop = (now: number) => {
-    const dt = this.last ? Math.min((now - this.last) / 1000, 0.05) : 0.016;
-    this.last = now;
-    this.model.tick(dt);
+  draw = (dt: number) => {
     const s = this.model.state;
     const origin = trackPoint(s.distance), heading = trackHeading(s.distance);
     this.circuit.rotation.y = heading;
@@ -261,15 +250,13 @@ export class RacingScene {
       this.onState({ ...s, input: { ...s.input } });
       this.emit = 0;
     }
-    this.frame = requestAnimationFrame(this.loop);
   };
   dispose() {
     this.disposed = true;
     this.cockpit.disposed = true;
     this.releaseLook();
     this.notice.dispose();
-    cancelAnimationFrame(this.frame);
-    this.resize.disconnect();
+    this.engine.dispose();
     this.scene.traverse((o) => {
       if (o instanceof T.Mesh) {
         o.geometry.dispose();
