@@ -149,6 +149,18 @@ test('countdown, acceleration, braking, pause and finish work end to end', () =>
   assert.equal(m.state.phase, 'finished');
   assert.equal(m.state.distance, RACE_DISTANCE);
 });
+test('phone acceleration starts a ready race and remains applied after countdown', () => {
+  const m = new RacingModel();
+  m.traffic = [];
+  assert.equal(m.receiveRemoteDrive({ steer: 0.4, throttle: 0.8, brake: 0 }), true);
+  assert.equal(m.state.phase, 'countdown');
+  assert.equal(m.state.input.throttle, 0.8);
+  tick(m, 3.5);
+  assert.equal(m.state.phase, 'racing');
+  assert.ok(m.state.speed > 0);
+  assert.ok(m.state.distance > 0);
+  assert.equal(m.receiveRemoteDrive({ steer: 0, throttle: 1, brake: 0 }), false);
+});
 test('collisions slow the car once per impact; off-road applies drag; malformed input is bounded', () => {
   const m = new RacingModel();
   m.start();

@@ -84,5 +84,40 @@ export function buildCircuit() {
   }
   const start = trackPosition(0);
   root.userData.start = start;
+
+  // The fixed barriers and buildings used to submit over a thousand draw calls.
+  // Bake their transforms into a handful of instanced batches by color.
+  root.updateMatrixWorld(true);
+  const boxes = new Map<number, T.Matrix4[]>();
+  const originals: T.Mesh<T.BoxGeometry, T.MeshStandardMaterial>[] = [];
+  root.traverse((object) => {
+    if (!(object instanceof T.Mesh) ||
+        !(object.geometry instanceof T.BoxGeometry) ||
+        !(object.material instanceof T.MeshStandardMaterial)) return;
+    const { width, height, depth } = object.geometry.parameters;
+    const matrix = object.matrixWorld.clone().multiply(
+      new T.Matrix4().makeScale(width, height, depth),
+    );
+    const color = object.material.color.getHex();
+    const batch = boxes.get(color) ?? [];
+    batch.push(matrix);
+    boxes.set(color, batch);
+    originals.push(object as T.Mesh<T.BoxGeometry, T.MeshStandardMaterial>);
+  });
+  for (const mesh of originals) {
+    mesh.removeFromParent();
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+  }
+  for (const [color, transforms] of boxes) {
+    const batch = new T.InstancedMesh(
+      new T.BoxGeometry(1, 1, 1), flat(color), transforms.length,
+    );
+    transforms.forEach((matrix, i) => batch.setMatrixAt(i, matrix));
+    batch.instanceMatrix.needsUpdate = true;
+    batch.computeBoundingSphere();
+    batch.castShadow = batch.receiveShadow = true;
+    root.add(batch);
+  }
   return root;
 }

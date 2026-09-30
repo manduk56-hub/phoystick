@@ -214,6 +214,12 @@ export class RacingModel {
     this.resetTraffic();
     this.updateStandings();
   }
+  receiveRemoteDrive(input: DriveInput) {
+    const started = this.state.phase === 'ready' && input.throttle > 0.25;
+    if (started) this.start();
+    this.setInput(input);
+    return started;
+  }
   updateStandings() {
     const s = this.state;
     s.standings = [

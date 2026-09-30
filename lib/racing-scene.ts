@@ -75,7 +75,7 @@ export class RacingScene {
     public onState: (state: RaceState) => void,
   ) {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
     this.renderer.setClearColor(0xaebcc4);
     this.releaseLook = cinematicLight(this.renderer, this.scene, 0.85, true);
     this.notice = assetNotice(canvas, '차량 모델');
@@ -90,7 +90,7 @@ export class RacingScene {
     const sun = new T.DirectionalLight(0xffe3ad, 3);
     sun.position.set(-40, 65, -110);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -25;
     sun.shadow.camera.right = 25;
     sun.shadow.camera.top = 25;
@@ -115,23 +115,24 @@ export class RacingScene {
     sunDisc.position.set(-145, 100, -440);
     sunDisc.visible = false;
     this.scene.add(sunDisc);
+    const terrain = new T.IcosahedronGeometry(1, 4);
+    const vertices = terrain.attributes.position;
+    for (let k = 0; k < vertices.count; k++) {
+      const x = vertices.getX(k),
+        y = vertices.getY(k),
+        z = vertices.getZ(k),
+        r =
+          1 +
+          0.1 * Math.sin(x * 17 + y * 11) * Math.cos(z * 13) +
+          0.07 * Math.sin(z * 29 + x * 19);
+      vertices.setXYZ(k, x * r, y * r, z * r);
+    }
+    terrain.computeVertexNormals();
+    const rockMaterial = scannedMaterial('rock_boulder_dry', 8);
     for (let i = 0; i < 15; i++) {
-      const terrain = new T.IcosahedronGeometry(1, 4);
-      const vertices = terrain.attributes.position;
-      for (let k = 0; k < vertices.count; k++) {
-        const x = vertices.getX(k),
-          y = vertices.getY(k),
-          z = vertices.getZ(k),
-          r =
-            1 +
-            0.1 * Math.sin(x * 17 + y * 11) * Math.cos(z * 13) +
-            0.07 * Math.sin(z * 29 + x * 19);
-        vertices.setXYZ(k, x * r, y * r, z * r);
-      }
-      terrain.computeVertexNormals();
       const mountain = new T.Mesh(
         terrain,
-        scannedMaterial('rock_boulder_dry', 8),
+        rockMaterial,
       );
       mountain.scale.set(75 + (i % 3) * 25, 60 + (i % 4) * 30, 65);
       const angle = i / 15 * Math.PI * 2;
@@ -257,14 +258,7 @@ export class RacingScene {
     this.releaseLook();
     this.notice.dispose();
     this.engine.dispose();
-    this.scene.traverse((o) => {
-      if (o instanceof T.Mesh) {
-        o.geometry.dispose();
-        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) =>
-          m.dispose(),
-        );
-      }
-    });
+    disposeModel(this.scene);
     this.renderer.dispose();
     this.cockpit.texture.dispose();
   }

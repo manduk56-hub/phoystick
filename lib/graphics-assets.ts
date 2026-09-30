@@ -10,6 +10,7 @@ function draco() {
   return (decoder ??= new DRACOLoader().setDecoderPath('/assets/draco/'));
 }
 const models = new Map<string, Promise<GLTF>>();
+const sharedModelGeometry = new WeakSet<T.BufferGeometry>();
 export function gameModel(name: 'yeti' | 'fish' | 'car') {
   if (name !== 'car')
     return Promise.resolve({
@@ -32,13 +33,14 @@ export function gameModel(name: 'yeti' | 'fish' | 'car') {
     const scene = clone(source.scene) as T.Group;
     scene.traverse((o) => {
       if (o instanceof T.Mesh) {
-        o.geometry = o.geometry.clone();
+        // Car instances share the immutable GLTF geometry; only paint and
+        // lighting materials need a per-car copy.
+        sharedModelGeometry.add(o.geometry);
         o.material = Array.isArray(o.material)
           ? o.material.map((m) => m.clone())
           : o.material.clone();
         o.castShadow = true;
         o.receiveShadow = true;
-        o.frustumCulled = false;
       }
     });
     return { scene, animations: source.animations };
@@ -47,7 +49,7 @@ export function gameModel(name: 'yeti' | 'fish' | 'car') {
 export function disposeModel(root: T.Object3D) {
   root.traverse((o) => {
     if (o instanceof T.Mesh) {
-      o.geometry.dispose();
+      if (!sharedModelGeometry.has(o.geometry)) o.geometry.dispose();
       (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) =>
         m.dispose(),
       );

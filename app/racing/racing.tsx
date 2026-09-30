@@ -325,7 +325,6 @@ function Host() {
         lastStamp.current = p.time;
         lastSeen.current = Date.now();
         remote.current = true;
-        if (p.drive) scene.current?.model.setInput(p.drive);
         for (const e of p.events || []) {
           if (e.id <= lastEvent.current) continue;
           lastEvent.current = e.id;
@@ -338,6 +337,14 @@ function Host() {
           if (e.action === 'pause') pause();
           if (e.action === 'hold' && scene.current)
             scene.current.model.state.paused = true;
+        }
+        if (p.drive && scene.current) {
+          const model = scene.current.model;
+          if (model.receiveRemoteDrive(p.drive)) {
+            setSetup(false);
+            setActive(true);
+            setError('');
+          }
         }
       };
       const url = new URL('/racing', location.origin);
@@ -841,7 +848,6 @@ function Controller() {
     drive.current = idleInput();
     setCalibrated(true);
     setError('');
-    sendEvent('hold');
   }
   return (
     <section className="race-controller">
@@ -999,7 +1005,7 @@ function Controller() {
               <span>↶ 좌우 회전 = 조향</span>
               <span>↗ 윗면 앞으로 = 가속</span>
               <span>↙ 몸쪽으로 = 브레이크</span>
-              <small>중립 ±4° · 25°에서 최대 가속·제동 · 조향 최대 35°</small>
+              <small>기준 자세 설정 후 가속하면 자동 출발 · 중립 ±4° · 25°에서 최대 가속·제동</small>
             </footer>
           )}
           {!touch && !landscape && (
