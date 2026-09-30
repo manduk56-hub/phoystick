@@ -1,4 +1,4 @@
-import { sentinel, riverFish } from './object-design.ts';
+import { sentinel } from './object-design.ts';
 import * as T from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
@@ -11,10 +11,10 @@ function draco() {
 }
 const models = new Map<string, Promise<GLTF>>();
 const sharedModelGeometry = new WeakSet<T.BufferGeometry>();
-export function gameModel(name: 'yeti' | 'fish' | 'car') {
+export function gameModel(name: 'yeti' | 'car') {
   if (name !== 'car')
     return Promise.resolve({
-      scene: name === 'yeti' ? sentinel() : riverFish(),
+      scene: sentinel(),
       animations: [] as T.AnimationClip[],
     });
   if (!models.has(name))

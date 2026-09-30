@@ -106,4 +106,6 @@ done
 [[ "$healthy" == true ]]
 service is-active --quiet motion-games.service
 service is-active --quiet motion-games-api.service
+# Validation fixtures are not needed after the deployment check.
+rm -rf -- "$release/tests"
 echo "Deployed $sha"
